@@ -1,27 +1,28 @@
+use std::rc::Rc;
+use std::marker::PhantomData;
 use std::collections::BTreeMap;
 
-pub type TarsMap<'a> = BTreeMap<TarsType<'a>, TarsType<'a>>;
+pub type TarsMap = BTreeMap<TarsType, TarsType>;
 
 pub type TarsSimpleList = Vec<u8>;
 
-pub type TarsList<'a> = Vec<TarsType<'a>>;
+pub type TarsList = Vec<TarsType>;
 
-#[derive(Debug, PartialEq)]
-pub enum TarsType<'a> {
-    EnInt8(i8),
-    EnInt16(i16),
-    EnInt32(i32),
-    EnInt64(i64),
-    EnFloat(f32),
-    EnDouble(f64),
-    EnString1(&'a str),
-    EnString4(&'a str),
-    EnMaps(TarsMap<'a>),
-    EnList(TarsList<'a>),
-    EnStructBegin,
-    EnStructEnd,
-    EnZero,
-    EnSimplelist(TarsSimpleList),
+#[derive(Debug, PartialEq, Clone)]
+pub enum TarsType {
+    EnInt8(i8),                     // = 0
+    EnInt16(i16),                   // = 1
+    EnInt32(i32),                   // = 2
+    EnInt64(i64),                   // = 3
+    EnFloat(f32),                   // = 4
+    EnDouble(f64),                  // = 5
+    EnString(String),               // = 6 || 7
+    EnMaps(TarsMap),                // = 8
+    EnList(TarsList),               // = 9
+    EnStructBegin,                  // = 10
+    EnStructEnd,                    // = 11
+    EnZero,                         // = 12
+    EnSimplelist(TarsSimpleList),   // = 13
 }
 
 
