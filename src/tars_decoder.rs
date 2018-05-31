@@ -1,18 +1,18 @@
-use std::collections::BTreeMap;
 use std::io::{BufRead, Cursor};
 
 use std::mem;
 
 use bytes::Buf;
+use bytes::Bytes;
 
 use errors::DecodeErr;
 use tars_type::TarsType::*;
 use tars_type::*;
 
-#[derive(Debug)]
-pub struct TarsDecoder<'a> {
-    buf: Cursor<&'a [u8]>,
-    map: TarsStruct,
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct TarsStructDecoder {
+    buf: Bytes,
+    pos: usize,
 }
 #[derive(Debug)]
 struct Head {
@@ -20,32 +20,73 @@ struct Head {
     tars_type: u8,
 }
 
-impl<'a> TarsDecoder<'a> {
-    pub fn new(buf: &'a [u8]) -> TarsDecoder {
-        TarsDecoder {
-            buf: Cursor::new(buf),
-            map: TarsStruct::new(),
+impl TarsStructDecoder {
+    pub fn new(buf: &[u8]) -> TarsStructDecoder {
+        let mut b = Bytes::new();
+        b.extend_from_slice(buf);
+        TarsStructDecoder { buf: b, pos: 0 }
+    }
+
+    pub fn get(&mut self, tag: u8) -> Result<TarsType, DecodeErr> {
+        self.pos = 0;
+        if let Ok(head) = self.skip_to_tag(tag) {
+            Ok(self.read(head.tars_type)?)
+        } else {
+            Err(DecodeErr::TagNotFoundErr)
         }
     }
 
-    pub fn decode_all(&mut self) -> Result<(), DecodeErr> {
-        self.buf.set_position(0);
-        while self.buf.has_remaining() {
-            let head = self.get_head()?;
-            let value = self.read(head.tars_type)?;
-            self.map.insert(head.tag, value);
-        }
-        Ok(())
+    fn has_remaining(&self) -> bool {
+        self.pos < self.buf.len()
     }
 
-    fn skip_to_tag(&mut self, tag: u8) -> Result<bool, DecodeErr> {
-        let mut success = false;
-        while self.buf.has_remaining() {
-            let head = self.get_head()?;
-            if head.tag != tag {}
-            success = true;
+    fn remaining(&self) -> usize {
+        self.buf.len() - self.pos
+    }
+
+    fn get_u8(&mut self) -> u8 {
+        self.pos += 1;
+        self.buf[self.pos - 1]
+    }
+
+    fn get_i8(&mut self) -> i8 {
+        self.get_u8() as i8
+    }
+
+    fn get_i16_be(&mut self) -> i16 {
+        self.pos += 2;
+        let mut cur = Cursor::new(&self.buf[self.pos - 2..]);
+        cur.get_i16_be()
+    }
+
+    fn get_i32_be(&mut self) -> i32 {
+        self.pos += 4;
+        let mut cur = Cursor::new(&self.buf[self.pos - 4..]);
+        cur.get_i32_be()
+    }
+
+    fn get_i64_be(&mut self) -> i64 {
+        self.pos += 8;
+        let mut cur = Cursor::new(&self.buf[self.pos - 8..]);
+        cur.get_i64_be()
+    }
+
+    fn skip_to_tag(&mut self, tag: u8) -> Result<Head, DecodeErr> {
+        let mut result: Option<Head> = None;
+        while self.has_remaining() {
+            let head = self.take_head()?;
+            if head.tag == tag {
+                result = Some(head);
+                break;
+            } else {
+                let taked_size = self.take_size(head.tars_type)?;
+                self.pos += taked_size;
+            }
         }
-        Ok(success)
+        match result {
+            Some(h) => Ok(h),
+            None => Err(DecodeErr::NoEnoughDataErr),
+        }
     }
 
     fn read(&mut self, tars_type: u8) -> Result<TarsType, DecodeErr> {
@@ -79,23 +120,33 @@ impl<'a> TarsDecoder<'a> {
                 let value = self.take_string(size)?;
                 Ok(EnString(value))
             }
-            _ => panic!("unknown tars type"),
+            _ if tars_type == 8 => {
+                let size = self.take_map_size()?;
+                let value = self.take_map(size)?;
+                Ok(EnMaps(value))
+            }
+            // _ if tars_type == 9 => {
+            //     let size = self.take_list_size()?;
+            //     let value = self.take_list(size)?;
+            //     Ok(EnList(value))
+            // }
+            // _ if tars_type == 10 => {
+            //     let value = self.take_struct()?;
+            //     Ok(EnStruct(value))
+            // }
+            _ => Err(DecodeErr::UnknownTarsTypeErr),
         }
     }
 
-    pub fn get_map(&mut self) -> BTreeMap<u8, TarsType> {
-        mem::replace(&mut self.map, BTreeMap::new())
-    }
-
-    fn get_head(&mut self) -> Result<Head, DecodeErr> {
-        if self.buf.remaining() < 1 {
+    fn take_head(&mut self) -> Result<Head, DecodeErr> {
+        if self.remaining() < 1 {
             Err(DecodeErr::NoEnoughDataErr)
         } else {
-            let b = self.buf.get_u8();
+            let b = self.get_u8();
             let tars_type = b & 0x0f;
             let mut tag = (b & 0xf0) >> 4;
             if tag >= 15 {
-                tag = self.buf.get_u8();
+                tag = self.get_u8();
             }
             Ok(Head {
                 tag: tag,
@@ -114,61 +165,66 @@ impl<'a> TarsDecoder<'a> {
             _ if tars_type == 5 => Ok(8),
             _ if tars_type == 6 || tars_type == 7 => Ok(self.take_string_size(tars_type)?),
             _ if tars_type == 8 => Ok(self.take_map_size()?),
-            _ => panic!("unknown tars type"),
+            _ if tars_type == 9 => Ok(self.take_list_size()?),
+            _ if tars_type == 10 => Ok(self.take_struct_size()?),
+            _ if tars_type == 12 => Ok(1),
+            _ if tars_type == 13 => unimplemented!(),
+            _ => Err(DecodeErr::UnknownTarsTypeErr),
         }
     }
 
-    pub fn take_int8(&mut self) -> Result<i8, DecodeErr> {
-        if self.buf.remaining() < 1 {
+    fn take_int8(&mut self) -> Result<i8, DecodeErr> {
+        if self.remaining() < 1 {
             Err(DecodeErr::NoEnoughDataErr)
         } else {
-            Ok(self.buf.get_i8())
+            Ok(self.get_i8())
         }
     }
 
     fn take_int16(&mut self) -> Result<i16, DecodeErr> {
-        if self.buf.remaining() < 2 {
+        if self.remaining() < 2 {
             Err(DecodeErr::NoEnoughDataErr)
         } else {
-            Ok(self.buf.get_i16_be())
+            Ok(self.get_i16_be())
         }
     }
 
     fn take_int32(&mut self) -> Result<i32, DecodeErr> {
-        if self.buf.remaining() < 4 {
+        if self.remaining() < 4 {
             Err(DecodeErr::NoEnoughDataErr)
         } else {
-            Ok(self.buf.get_i32_be())
+            Ok(self.get_i32_be())
         }
     }
 
     fn take_int64(&mut self) -> Result<i64, DecodeErr> {
-        if self.buf.remaining() < 8 {
+        if self.remaining() < 8 {
             Err(DecodeErr::NoEnoughDataErr)
         } else {
-            Ok(self.buf.get_i64_be())
+            Ok(self.get_i64_be())
         }
     }
 
     fn take_float(&mut self) -> Result<u32, DecodeErr> {
-        if self.buf.remaining() < 4 {
+        if self.remaining() < 4 {
             Err(DecodeErr::NoEnoughDataErr)
         } else {
-            Ok(self.buf.get_u32_be())
+            Ok(self.get_i32_be() as u32)
         }
     }
 
     fn take_double(&mut self) -> Result<u64, DecodeErr> {
-        if self.buf.remaining() < 8 {
+        if self.remaining() < 8 {
             Err(DecodeErr::NoEnoughDataErr)
         } else {
-            Ok(self.buf.get_u64_be())
+            Ok(self.get_i64_be() as u64)
         }
     }
 
     fn take_string_size(&mut self, tars_type: u8) -> Result<usize, DecodeErr> {
         if tars_type == 6 {
-            Ok(self.take_int8()? as usize)
+            let s = self.take_int8()?;
+            Ok(s as usize)
         } else if tars_type == 7 {
             Ok(self.take_int32()? as usize)
         } else {
@@ -177,12 +233,12 @@ impl<'a> TarsDecoder<'a> {
     }
 
     fn take_string(&mut self, size: usize) -> Result<String, DecodeErr> {
-        if self.buf.remaining() < size {
+        if self.remaining() < size {
             Err(DecodeErr::NoEnoughDataErr)
         } else {
             let mut b = vec![];
             for _ in 0..size {
-                b.push(self.buf.get_u8())
+                b.push(self.get_u8())
             }
             Ok(String::from_utf8(b).unwrap())
         }
@@ -193,14 +249,16 @@ impl<'a> TarsDecoder<'a> {
     }
 
     fn take_map(&mut self, size: usize) -> Result<TarsMap, DecodeErr> {
-        let mut map = BTreeMap::new();
-        for _ in 0..size {
-            let key_head = self.get_head()?;
+        let mut map = TarsMap::new();
+        let before_pos = self.pos;
+        while self.pos < before_pos + size {
+            let key_head = self.take_head()?;
             let key = self.read(key_head.tars_type)?;
-            let value_head = self.get_head()?;
+            let value_head = self.take_head()?;
             let value = self.read(value_head.tars_type)?;
             map.insert(key, value);
         }
+        assert_eq!(self.pos, before_pos + size);
         Ok(map)
     }
 
@@ -208,27 +266,223 @@ impl<'a> TarsDecoder<'a> {
         Ok(self.take_int32()? as usize)
     }
 
-    fn take_struct_size(&mut self) -> Result<usize, DecodeErr> {
-        let cur_pos = self.buf.position();
-        // 0x0B means (tag, type) => (0, EnStructEnd) => (0, 11)
-        let num_bytes = self.buf.read_until(0x0B, &mut vec![]);
-        self.buf.set_position(cur_pos);
-        match num_bytes {
-            Ok(size) => Ok(size),
-            Err(_) => Err(DecodeErr::NoEnoughDataErr)
+    fn take_list(&mut self, size: usize) -> Result<TarsList, DecodeErr> {
+        let mut v = vec![];
+        let before_pos = self.pos;
+        while self.pos < before_pos + size {
+            let value_head = self.take_head()?;
+            let value = self.read(value_head.tars_type)?;
+            v.push(value);
         }
+        assert_eq!(self.pos, before_pos + size);
+        Ok(v)
+    }
+
+    fn take_struct_size(&mut self) -> Result<usize, DecodeErr> {
+        let before_pos = self.pos;
+        // 0x0B means (tag, type) => (0, EnStructEnd) => (0, 11)
+        let mut head = self.take_head()?;
+        while head.tars_type != 11 {
+            // 递归获取 struct 内部元素大小
+            let ele_size = self.take_size(head.tars_type).unwrap();
+            // 跳过元素内容
+            self.buf.advance(ele_size);
+            // 获取下一个头部
+            head = self.take_head()?;
+        }
+        // 获取当前位置
+        let after_pos = self.pos;
+        // rollback to before_pos
+        self.pos = before_pos;
+        Ok((after_pos - before_pos) as usize)
+    }
+
+    fn take_struct(&self, size: usize) -> Result<TarsStructDecoder, DecodeErr> {
+        let (left, right) = (self.pos, self.pos + size);
+        Ok(TarsStructDecoder::new(&self.buf[left..right]))
     }
 }
 
 mod tests {
-    use super::TarsDecoder;
+    use super::TarsStructDecoder;
     use errors::DecodeErr;
+    use std::mem;
     use tars_type::TarsType::*;
+    use tars_type::*;
+
+    #[test]
+    fn test_get() {
+        let d: [u8; 20] = [
+            // {tag: 1, type: 6}
+            0x16,
+            7,
+            b'f',
+            b'o',
+            b'o',
+            b' ',
+            b'b',
+            b'a',
+            b'r',
+            // {tag: 2, type: 6}
+            0x26,
+            7,
+            b'f',
+            b'o',
+            b'o',
+            b' ',
+            b'b',
+            b'a',
+            b'r',
+            // {tag: 3, type: 0}
+            0x30,
+            8,
+        ];
+
+        let mut de = TarsStructDecoder::new(&d);
+
+        for _ in 0..10 {
+            assert_eq!(de.get(1), Ok(EnString(String::from(&"foo bar"[..]))));
+            assert_eq!(de.get(2), Ok(EnString(String::from(&"foo bar"[..]))));
+            assert_eq!(de.get(3), Ok(EnInt8(8)));
+
+            assert_eq!(de.get(0), Err(DecodeErr::TagNotFoundErr));
+            assert_eq!(de.get(200), Err(DecodeErr::TagNotFoundErr));
+            assert_eq!(de.get(255), Err(DecodeErr::TagNotFoundErr));
+        }
+    }
+
+    #[test]
+    fn test_take_list() {
+        let size: [u8; 4] = unsafe { mem::transmute(26u32.to_be()) };
+        let b: [u8; 30] = [
+            size[0],
+            size[1],
+            size[2],
+            size[3],
+            // {tag: 0, type: 6}
+            0x06,
+            7,
+            b'f',
+            b'o',
+            b'o',
+            b' ',
+            b'b',
+            b'a',
+            b'r',
+            // {tag: 0, type: 6}
+            0x06,
+            11,
+            b'h',
+            b'e',
+            b'l',
+            b'l',
+            b'o',
+            b' ',
+            b'w',
+            b'o',
+            b'r',
+            b'l',
+            b'd',
+            // {tag: 0, type: 0}
+            0x00,
+            8,
+            // {tag: 0, type: 0}
+            0x00,
+            9,
+        ];
+        let mut de = TarsStructDecoder::new(&b[..]);
+        let list_size = de.take_list_size().unwrap();
+        assert_eq!(list_size, 26);
+        let list = de.take_list(list_size).unwrap();
+        assert_eq!(list[0], EnString(String::from(&"foo bar"[..])));
+        assert_eq!(list[1], EnString(String::from(&"hello world"[..])));
+        assert_eq!(list[2], EnInt8(8));
+        assert_eq!(list[3], EnInt8(9));
+    }
+
+    #[test]
+    fn test_take_map() {
+        let size: [u8; 4] = unsafe { mem::transmute(26u32.to_be()) };
+        let b: [u8; 30] = [
+            size[0],
+            size[1],
+            size[2],
+            size[3],
+            // {tag: 0, type: 6}
+            0x06,
+            7,
+            b'f',
+            b'o',
+            b'o',
+            b' ',
+            b'b',
+            b'a',
+            b'r',
+            // {tag: 0, type: 6}
+            0x06,
+            11,
+            b'h',
+            b'e',
+            b'l',
+            b'l',
+            b'o',
+            b' ',
+            b'w',
+            b'o',
+            b'r',
+            b'l',
+            b'd',
+            // {tag: 0, type: 0}
+            0x00,
+            8,
+            // {tag: 0, type: 0}
+            0x00,
+            9,
+        ];
+        let mut de2 = TarsStructDecoder::new(&b[..]);
+        let map_size = de2.take_map_size().unwrap();
+        assert_eq!(map_size, 26);
+        let map = de2.take_map(map_size);
+        match map {
+            Ok(m) => {
+                let value1 = m.get(&EnInt8(8)).unwrap();
+                assert_eq!(value1, &EnInt8(9));
+                let value2 = m.get(&EnString(String::from(&"foo bar"[..]))).unwrap();
+                assert_eq!(value2, &EnString(String::from(&"hello world"[..])));
+            }
+            Err(_) => assert!(false),
+        }
+    }
+
+    #[test]
+    fn test_take_int64() {
+        let b: [u8; 8] = unsafe { mem::transmute(0x0acb8b9d9d9d9d9di64.to_be()) };
+        let mut de2 = TarsStructDecoder::new(&b[..]);
+        let i = de2.take_int64();
+        assert_eq!(i, Ok(0x0acb8b9d9d9d9d9d));
+        assert_eq!(de2.take_int64(), Err(DecodeErr::NoEnoughDataErr));
+    }
+
+    #[test]
+    fn test_take_int32() {
+        let b: [u8; 4] = unsafe { mem::transmute(0x0acb8b9di32.to_be()) };
+        let mut de2 = TarsStructDecoder::new(&b[..]);
+        assert_eq!(de2.take_int32(), Ok(0x0acb8b9d));
+        assert_eq!(de2.take_int32(), Err(DecodeErr::NoEnoughDataErr));
+    }
+
+    #[test]
+    fn test_take_int16() {
+        let b: [u8; 2] = unsafe { mem::transmute(0x0acbi16.to_be()) };
+        let mut de2 = TarsStructDecoder::new(&b[..]);
+        assert_eq!(de2.take_int16(), Ok(0x0acb));
+        assert_eq!(de2.take_int16(), Err(DecodeErr::NoEnoughDataErr));
+    }
 
     #[test]
     fn test_take_int8() {
         let b2: [u8; 10] = [63; 10];
-        let mut de2 = TarsDecoder::new(&b2[..]);
+        let mut de2 = TarsStructDecoder::new(&b2[..]);
         for _ in 0..10 {
             assert_eq!(de2.take_int8(), Ok(63));
         }
@@ -236,7 +490,7 @@ mod tests {
         assert_eq!(de2.take_int8(), Err(DecodeErr::NoEnoughDataErr));
 
         let b: [u8; 10] = [1; 10];
-        let mut de = TarsDecoder::new(&b[..]);
+        let mut de = TarsStructDecoder::new(&b[..]);
         for _ in 0..10 {
             assert_eq!(de.read(0), Ok(EnInt8(1)));
         }
@@ -246,9 +500,101 @@ mod tests {
 
     #[test]
     fn test_take_string() {
-        let mut de = TarsDecoder::new(&b"hello world"[..]);
+        let mut de = TarsStructDecoder::new(&b"hello world"[..]);
         assert_eq!(de.take_string(11), Ok(String::from(&"hello world"[..])));
         assert_eq!(de.take_string(1), Err(DecodeErr::NoEnoughDataErr));
 
+        // test read string1
+        let d2: [u8; 8] = [7, b'f', b'o', b'o', b' ', b'b', b'a', b'r'];
+        let mut de2 = TarsStructDecoder::new(&d2);
+        assert_eq!(de2.read(6), Ok(EnString(String::from(&"foo bar"[..]))));
+
+        // test read string4
+        let size: [u8; 4] = unsafe { mem::transmute(7u32.to_be()) };
+        let d3: [u8; 11] = [
+            size[0], size[1], size[2], size[3], b'f', b'o', b'o', b' ', b'b', b'a', b'r',
+        ];
+        let mut de3 = TarsStructDecoder::new(&d3);
+        assert_eq!(de3.read(7), Ok(EnString(String::from(&"foo bar"[..]))));
     }
+
+    // #[test]
+    // fn test_take_struct() {
+    //     let d: [u8; 21] = [
+    //         // {tag: 1, type: 6}
+    //         0x16,
+    //         7,
+    //         b'f',
+    //         b'o',
+    //         b'o',
+    //         b' ',
+    //         b'b',
+    //         b'a',
+    //         b'r',
+    //         // {tag: 2, type: 6}
+    //         0x26,
+    //         7,
+    //         b'f',
+    //         b'o',
+    //         b'o',
+    //         b' ',
+    //         b'b',
+    //         b'a',
+    //         b'r',
+    //         // {tag: 3, type: 0}
+    //         0x30,
+    //         8,
+    //         // StructEnd
+    //         0x0B,
+    //     ];
+    //     let mut de = TarsStructDecoder::new(&d);
+
+    //     match de.take_struct() {
+    //         Ok(map) => {
+    //             assert_eq!(map.get(&1), Some(&EnString(String::from(&"foo bar"[..]))));
+    //             assert_eq!(map.get(&2), Some(&EnString(String::from(&"foo bar"[..]))));
+    //             assert_eq!(map.get(&3), Some(&EnInt8(8)));
+    //         }
+    //         Err(_) => assert!(false),
+    //     }
+
+    //     // take_struct() won't consume header
+    //     let mut d2: Vec<u8> = vec![];
+    //     d2.push(0x0A);
+    //     d2.extend_from_slice(&d);
+    //     d2.push(0x0B);
+    //     let mut de2 = TarsStructDecoder::new(&d2);
+    //     match de2.take_struct() {
+    //         Ok(map) => {
+    //             let inner_struct = map.get(&0).unwrap().unwrap_struct_ref().unwrap();
+    //             assert_eq!(
+    //                 inner_struct.get(&1),
+    //                 Some(&EnString(String::from(&"foo bar"[..])))
+    //             );
+    //             assert_eq!(
+    //                 inner_struct.get(&2),
+    //                 Some(&EnString(String::from(&"foo bar"[..])))
+    //             );
+    //             assert_eq!(inner_struct.get(&3), Some(&EnInt8(8)));
+    //         }
+    //         Err(_) => assert!(false),
+    //     }
+
+    //     // decode_all() will consume header
+    //     let mut d3: Vec<u8> = vec![];
+    //     d3.push(0x0A);
+    //     d3.extend_from_slice(&d);
+    //     let mut de3 = TarsStructDecoder::new(&d3);
+    //     let map = de3.decode_all().unwrap();
+    //     let struct_0 = map.get(&0).unwrap().unwrap_struct_ref().unwrap();
+    //     assert_eq!(
+    //         struct_0.get(&1),
+    //         Some(&EnString(String::from(&"foo bar"[..])))
+    //     );
+    //     assert_eq!(
+    //         struct_0.get(&2),
+    //         Some(&EnString(String::from(&"foo bar"[..])))
+    //     );
+    //     assert_eq!(struct_0.get(&3), Some(&EnInt8(8)));
+    // }
 }
