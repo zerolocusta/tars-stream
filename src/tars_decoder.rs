@@ -139,8 +139,7 @@ impl TarsStructDecoder {
             _ if tars_type == 12 => Ok(EnZero),
             // TODO: add more test
             _ if tars_type == 13 => {
-                let size = self.take_simple_list_size()?;
-                let value = self.take_simple_list(size)?;
+                let value = self.take_simple_list()?;
                 Ok(EnSimplelist(value))
             }
             _ => Err(DecodeErr::UnknownTarsTypeErr),
@@ -294,17 +293,18 @@ impl TarsStructDecoder {
         Ok(self.take_int32()? as usize)
     }
 
-    fn take_simple_list(&mut self, size: usize) -> Result<TarsSimpleList, DecodeErr> {
+    fn take_simple_list(&mut self) -> Result<TarsSimpleList, DecodeErr> {
         let mut v = vec![];
         let head = self.take_head()?;
         if head.tars_type != 0 {
             Err(DecodeErr::WrongSimpleListTarsTypeErr)
         } else {
+            let size = self.take_simple_list_size()?;
             let before_pos = self.pos;
-            while self.pos < before_pos + size - head.len as usize{
+            while self.pos < before_pos + size{
                 v.push(self.get_u8());
             }
-            assert_eq!(self.pos, before_pos + size - head.len as usize);
+            assert_eq!(self.pos, before_pos + size);
             Ok(v)
         }
     }
@@ -427,22 +427,20 @@ mod tests {
 
     #[test]
     fn test_take_simple_list() {
-        let head: [u8; 4] = unsafe{ mem::transmute(5u32.to_be()) };
+        let head: [u8; 4] = unsafe{ mem::transmute(4u32.to_be()) };
         let b: [u8; 9] = [
+            0x00,       // {tag: 0, type: 0}
             head[0],
             head[1],
             head[2],
             head[3],
-            0x00,
             4,
             5,
             6,
             7,
         ];
         let mut de = TarsStructDecoder::new(&b);
-        let list_size = de.take_simple_list_size().unwrap();
-        assert_eq!(list_size, 5);
-        let list = de.take_simple_list(list_size).unwrap();
+        let list = de.take_simple_list().unwrap();
         assert_eq!(list, vec![4, 5, 6, 7]);
     }
 
