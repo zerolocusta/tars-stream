@@ -137,6 +137,12 @@ impl TarsStructDecoder {
                 Ok(EnStruct(value))
             }
             _ if tars_type == 12 => Ok(EnZero),
+            // TODO: add more test
+            _ if tars_type == 13 => {
+                let size = self.take_simple_list_size()?;
+                let value = self.take_simple_list(size)?;
+                Ok(EnSimplelist(value))
+            }
             _ => Err(DecodeErr::UnknownTarsTypeErr),
         }
     }
@@ -363,7 +369,7 @@ mod tests {
             // {tag: 3, type: 0}
             0x30,
             8,
-            // {tag: 4, type: 10} inner struct
+            // {tag: 4, type: 10} start inner struct
             0x4A,
             // {struct: {tag: 1, type: 6} }
             0x16,
