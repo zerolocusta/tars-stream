@@ -10,6 +10,9 @@ quick_error!{
         TagNotFoundErr{
             description("decoder: Tag Not Found")
         }
+        WrongSimpleListTarsTypeErr {
+            description("decoder: wrong simple list type")
+        }
     }
 }
 quick_error!{

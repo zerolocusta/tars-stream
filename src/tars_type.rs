@@ -43,6 +43,13 @@ impl TarsType {
         }
     }
 
+    pub fn unwrap_double(self) -> Result<f64, TarsTypeErr> {
+        match self {
+            TarsType::EnDouble(f) => Ok(f64::from_bits(f)),
+            _ => Err(TarsTypeErr::DisMatchTarsTypeErr),
+        }
+    }
+
     pub fn unwrap_struct(self) -> Result<TarsStructDecoder, TarsTypeErr> {
         match self {
             TarsType::EnStruct(s) => Ok(s),
