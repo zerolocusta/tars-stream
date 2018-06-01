@@ -1,4 +1,7 @@
-pub trait TarsStruct {
-    fn from_slice(&mut self, buf: &[u8]);
-    fn to_slice(&self) -> &[u8];
+use bytes::Bytes;
+use std::fmt::*;
+
+pub trait TarsStruct: Debug {
+    fn from_bytes(&mut self, buf: Bytes);
+    fn to_bytes(&self) -> Bytes;
 }
