@@ -136,11 +136,11 @@ impl TarsStructDecoder {
                 let value = self.take_struct(size)?;
                 Ok(EnStruct(value))
             }
-            _ if tars_type == TarsTypeMark::EnZero.value() => Ok(EnZero),
+            _ if tars_type == TarsTypeMark::EnZero.value() => Ok(EnInt8(0)),
             // TODO: add more test
             _ if tars_type == TarsTypeMark::EnSimplelist.value() => {
                 let value = self.take_simple_list()?;
-                Ok(EnSimplelist(value))
+                Ok(EnList(value))
             }
             _ => Err(DecodeErr::UnknownTarsTypeErr),
         }
@@ -299,7 +299,7 @@ impl TarsStructDecoder {
         Ok(self.take_int32()? as usize)
     }
 
-    fn take_simple_list(&mut self) -> Result<TarsSimpleList, DecodeErr> {
+    fn take_simple_list(&mut self) -> Result<TarsList, DecodeErr> {
         let mut v = vec![];
         let head = self.take_head()?;
         if head.tars_type != TarsTypeMark::EnInt8.value() {
@@ -308,7 +308,7 @@ impl TarsStructDecoder {
             let size = self.take_simple_list_size()?;
             let before_pos = self.pos;
             while self.pos < before_pos + size {
-                v.push(self.get_u8());
+                v.push(EnInt8(self.get_i8()));
             }
             assert_eq!(self.pos, before_pos + size);
             Ok(v)
@@ -334,11 +334,13 @@ impl TarsStructDecoder {
         Ok((after_pos - before_pos) as usize)
     }
 
-    fn take_struct(&mut self, size: usize) -> Result<TarsStructDecoder, DecodeErr> {
+    fn take_struct(&mut self, size: usize) -> Result<Bytes, DecodeErr> {
         // Abandon StructEnd (-1)
         let (left, right) = (self.pos, self.pos + size - 1);
         self.pos += size;
-        Ok(TarsStructDecoder::new(&self.buf[left..right]))
+        let mut b = Bytes::new();
+        b.extend_from_slice(&self.buf[left..right]);
+        Ok(b)
     }
 }
 
@@ -416,15 +418,16 @@ mod tests {
             assert_eq!(de.get(5), Ok(EnInt8(16)));
 
             let mut inner_struct = de.get(4).unwrap().unwrap_struct().unwrap();
+            let mut inner_struct_de = TarsStructDecoder::new(&inner_struct);
             assert_eq!(
-                inner_struct.get(1),
+                inner_struct_de.get(1),
                 Ok(EnString(String::from(&"foo bar"[..])))
             );
             assert_eq!(
-                inner_struct.get(2),
+                inner_struct_de.get(2),
                 Ok(EnString(String::from(&"foo bar"[..])))
             );
-            assert_eq!(inner_struct.get(3), Ok(EnInt8(8)));
+            assert_eq!(inner_struct_de.get(3), Ok(EnInt8(8)));
             assert_eq!(de.get(0), Err(DecodeErr::TagNotFoundErr));
             assert_eq!(de.get(200), Err(DecodeErr::TagNotFoundErr));
             assert_eq!(de.get(255), Err(DecodeErr::TagNotFoundErr));
@@ -447,7 +450,7 @@ mod tests {
         ];
         let mut de = TarsStructDecoder::new(&b);
         let list = de.take_simple_list().unwrap();
-        assert_eq!(list, vec![4, 5, 6, 7]);
+        assert_eq!(list, vec![EnInt8(4), EnInt8(5), EnInt8(6), EnInt8(7)]);
     }
 
     #[test]
@@ -455,10 +458,10 @@ mod tests {
         let b: [u8; 2] = [0x0C; 2];
         let mut de = TarsStructDecoder::new(&b);
         let head = de.take_head().unwrap();
-        assert_eq!(de.read(head.tars_type).unwrap(), EnZero);
+        assert_eq!(de.read(head.tars_type).unwrap(), EnInt8(0));
 
         let head = de.take_head().unwrap();
-        assert_eq!(de.read(head.tars_type).unwrap(), EnZero);
+        assert_eq!(de.read(head.tars_type).unwrap(), EnInt8(0));
 
         assert_eq!(de.take_head(), Err(DecodeErr::NoEnoughDataErr));
     }
@@ -706,20 +709,34 @@ mod tests {
 
         let struct_size = de.take_struct_size().unwrap();
         match de.take_struct(struct_size) {
-            Ok(mut inner_de) => {
-                assert_eq!(inner_de.get(1), Ok(EnString(String::from(&"foo bar"[..]))));
-                assert_eq!(inner_de.get(2), Ok(EnString(String::from(&"foo bar"[..]))));
-                assert_eq!(inner_de.get(3), Ok(EnInt8(8)));
+            Ok(inner_struct) => {
+                let mut inner_struct_de = TarsStructDecoder::new(&inner_struct);
+                assert_eq!(
+                    inner_struct_de.get(1),
+                    Ok(EnString(String::from(&"foo bar"[..])))
+                );
+                assert_eq!(
+                    inner_struct_de.get(2),
+                    Ok(EnString(String::from(&"foo bar"[..])))
+                );
+                assert_eq!(inner_struct_de.get(3), Ok(EnInt8(8)));
             }
             Err(_) => assert!(false),
         }
 
         let struct_size = de.take_struct_size().unwrap();
         match de.take_struct(struct_size) {
-            Ok(mut inner_de) => {
-                assert_eq!(inner_de.get(4), Ok(EnString(String::from(&"foo bar"[..]))));
-                assert_eq!(inner_de.get(5), Ok(EnString(String::from(&"foo bar"[..]))));
-                assert_eq!(inner_de.get(6), Ok(EnInt8(8)));
+            Ok(inner_struct) => {
+                let mut inner_struct_de = TarsStructDecoder::new(&inner_struct);
+                assert_eq!(
+                    inner_struct_de.get(4),
+                    Ok(EnString(String::from(&"foo bar"[..])))
+                );
+                assert_eq!(
+                    inner_struct_de.get(5),
+                    Ok(EnString(String::from(&"foo bar"[..])))
+                );
+                assert_eq!(inner_struct_de.get(6), Ok(EnInt8(8)));
             }
             Err(_) => assert!(false),
         }
@@ -736,27 +753,38 @@ mod tests {
         let mut de2 = TarsStructDecoder::new(&d2);
         let struct_size = de2.take_struct_size().unwrap();
         match de2.take_struct(struct_size) {
-            Ok(mut struct_1) => {
+            Ok(struct_1) => {
                 println!("\nstruct_1: {:?}\n", struct_1);
                 // 获取首层
-                let mut inner_de = struct_1.get(0).unwrap();
+                let mut inner_de = TarsStructDecoder::new(&struct_1);
                 println!("inner_de: {:?}\n", inner_de);
-                // 获取第二层
-                let mut inner_struct = inner_de.unwrap_struct().unwrap();
+
+                let mut inner_struct = inner_de.get(0).unwrap().unwrap_struct().unwrap();
                 println!("inner_struct: {:?}\n", inner_struct);
 
+                // 获取第二层
+                let mut inner_de2 = TarsStructDecoder::new(&inner_struct);
+                println!("inner_de2: {:?}\n", inner_de2);
+
+                let mut inner_struct2 = inner_de2.get(0).unwrap().unwrap_struct().unwrap();
+                println!("inner_struct2: {:?}\n", inner_struct);
+
                 // 获取第三层
-                let mut inner_struct2 = inner_struct.get(0).unwrap().unwrap_struct().unwrap();
-                println!("inner_struct2: {:?}\n", inner_struct2);
+                let mut inner_de3 = TarsStructDecoder::new(&inner_struct2);
+                println!("inner_de2: {:?}\n", inner_de2);
+
+                // let mut inner_struct3 = inner_de2.get(0).unwrap().unwrap_struct().unwrap();
+                // println!("inner_struct3: {:?}\n", inner_struct3);
+
                 assert_eq!(
-                    inner_struct2.get(1),
+                    inner_de3.get(1),
                     Ok(EnString(String::from(&"foo bar"[..])))
                 );
                 assert_eq!(
-                    inner_struct2.get(2),
+                    inner_de3.get(2),
                     Ok(EnString(String::from(&"foo bar"[..])))
                 );
-                assert_eq!(inner_struct2.get(3), Ok(EnInt8(8)));
+                assert_eq!(inner_de3.get(3), Ok(EnInt8(8)));
             }
             Err(_) => assert!(false),
         }
