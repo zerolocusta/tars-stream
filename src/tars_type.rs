@@ -3,6 +3,8 @@ use errors::TarsTypeErr;
 use std::collections::BTreeMap;
 use std::io::Cursor;
 
+use tars_decoder::TarsStructDecoder;
+
 pub trait DecodeFrom {
     fn decode_from_bytes(&Bytes) -> Self;
 }
@@ -116,6 +118,21 @@ impl DecodeFrom for f64 {
 impl DecodeFrom for String {
     fn decode_from_bytes(b: &Bytes) -> Self {
         String::from_utf8(b.to_vec()).unwrap()
+    }
+}
+
+impl<K: DecodeFrom + Ord, V: DecodeFrom> DecodeFrom for BTreeMap<K, V> {
+    fn decode_from_bytes(b: &Bytes) -> Self {
+        let mut map = BTreeMap::new();
+        let mut decoder = TarsStructDecoder::new(&b);
+        while decoder.has_remaining() {
+            let key_head = decoder.take_head().unwrap();
+            let key = decoder.read::<K>(key_head.tars_type).unwrap();
+            let value_head = decoder.take_head().unwrap();
+            let value = decoder.read::<V>(value_head.tars_type).unwrap();
+            map.insert(key, value);
+        }
+        map
     }
 }
 
