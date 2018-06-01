@@ -1,12 +1,10 @@
-use std::io::{BufRead, Cursor};
+use std::io::Cursor;
 
-use std::mem;
-
-use bytes::Buf;
-use bytes::Bytes;
+use bytes::{Buf, Bytes};
 
 use errors::DecodeErr;
 use tars_type::TarsType::*;
+use tars_type::TarsTypeMark;
 use tars_type::*;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -27,7 +25,7 @@ impl TarsStructDecoder {
         b.extend_from_slice(buf);
         TarsStructDecoder { buf: b, pos: 0 }
     }
-
+    // TODO: may not reset pos
     pub fn get(&mut self, tag: u8) -> Result<TarsType, DecodeErr> {
         self.pos = 0;
         if let Ok(head) = self.skip_to_tag(tag) {
@@ -92,53 +90,55 @@ impl TarsStructDecoder {
 
     fn read(&mut self, tars_type: u8) -> Result<TarsType, DecodeErr> {
         match tars_type {
-            _ if tars_type == 0 => {
+            _ if tars_type == TarsTypeMark::EnInt8.value() => {
                 let value = self.take_int8()?;
                 Ok(EnInt8(value))
             }
-            _ if tars_type == 1 => {
+            _ if tars_type == TarsTypeMark::EnInt16.value() => {
                 let value = self.take_int16()?;
                 Ok(EnInt16(value))
             }
-            _ if tars_type == 2 => {
+            _ if tars_type == TarsTypeMark::EnInt32.value() => {
                 let value = self.take_int32()?;
                 Ok(EnInt32(value))
             }
-            _ if tars_type == 3 => {
+            _ if tars_type == TarsTypeMark::EnInt64.value() => {
                 let value = self.take_int64()?;
                 Ok(EnInt64(value))
             }
-            _ if tars_type == 4 => {
+            _ if tars_type == TarsTypeMark::EnFloat.value() => {
                 let value = self.take_float()?;
                 Ok(EnFloat(value))
             }
-            _ if tars_type == 5 => {
+            _ if tars_type == TarsTypeMark::EnDouble.value() => {
                 let value = self.take_double()?;
                 Ok(EnDouble(value))
             }
-            _ if tars_type == 6 || tars_type == 7 => {
+            _ if tars_type == TarsTypeMark::EnString1.value()
+                || tars_type == TarsTypeMark::EnString4.value() =>
+            {
                 let size = self.take_string_size(tars_type)?;
                 let value = self.take_string(size)?;
                 Ok(EnString(value))
             }
-            _ if tars_type == 8 => {
+            _ if tars_type == TarsTypeMark::EnMaps.value() => {
                 let size = self.take_map_size()?;
                 let value = self.take_map(size)?;
                 Ok(EnMaps(value))
             }
-            _ if tars_type == 9 => {
+            _ if tars_type == TarsTypeMark::EnList.value() => {
                 let size = self.take_list_size()?;
                 let value = self.take_list(size)?;
                 Ok(EnList(value))
             }
-            _ if tars_type == 10 => {
+            _ if tars_type == TarsTypeMark::EnStructBegin.value() => {
                 let size = self.take_struct_size()?;
                 let value = self.take_struct(size)?;
                 Ok(EnStruct(value))
             }
-            _ if tars_type == 12 => Ok(EnZero),
+            _ if tars_type == TarsTypeMark::EnZero.value() => Ok(EnZero),
             // TODO: add more test
-            _ if tars_type == 13 => {
+            _ if tars_type == TarsTypeMark::EnSimplelist.value() => {
                 let value = self.take_simple_list()?;
                 Ok(EnSimplelist(value))
             }
@@ -168,18 +168,24 @@ impl TarsStructDecoder {
 
     fn take_size(&mut self, tars_type: u8) -> Result<usize, DecodeErr> {
         match tars_type {
-            _ if tars_type == 0 => Ok(1),
-            _ if tars_type == 1 => Ok(2),
-            _ if tars_type == 2 => Ok(4),
-            _ if tars_type == 3 => Ok(8),
-            _ if tars_type == 4 => Ok(4),
-            _ if tars_type == 5 => Ok(8),
-            _ if tars_type == 6 || tars_type == 7 => Ok(self.take_string_size(tars_type)?),
-            _ if tars_type == 8 => Ok(self.take_map_size()?),
-            _ if tars_type == 9 => Ok(self.take_list_size()?),
-            _ if tars_type == 10 => Ok(self.take_struct_size()?),
-            _ if tars_type == 12 => Ok(1),
-            _ if tars_type == 13 => Ok(self.take_simple_list_size()?),
+            _ if tars_type == TarsTypeMark::EnInt8.value() => Ok(1),
+            _ if tars_type == TarsTypeMark::EnInt16.value() => Ok(2),
+            _ if tars_type == TarsTypeMark::EnInt32.value() => Ok(4),
+            _ if tars_type == TarsTypeMark::EnInt64.value() => Ok(8),
+            _ if tars_type == TarsTypeMark::EnFloat.value() => Ok(4),
+            _ if tars_type == TarsTypeMark::EnDouble.value() => Ok(8),
+            _ if tars_type == TarsTypeMark::EnString1.value()
+                || tars_type == TarsTypeMark::EnString4.value() =>
+            {
+                Ok(self.take_string_size(tars_type)?)
+            }
+            _ if tars_type == TarsTypeMark::EnMaps.value() => Ok(self.take_map_size()?),
+            _ if tars_type == TarsTypeMark::EnList.value() => Ok(self.take_list_size()?),
+            _ if tars_type == TarsTypeMark::EnStructBegin.value() => Ok(self.take_struct_size()?),
+            _ if tars_type == TarsTypeMark::EnZero.value() => Ok(1),
+            _ if tars_type == TarsTypeMark::EnSimplelist.value() => {
+                Ok(self.take_simple_list_size()?)
+            }
             _ => Err(DecodeErr::UnknownTarsTypeErr),
         }
     }
@@ -233,10 +239,10 @@ impl TarsStructDecoder {
     }
 
     fn take_string_size(&mut self, tars_type: u8) -> Result<usize, DecodeErr> {
-        if tars_type == 6 {
+        if tars_type == TarsTypeMark::EnString1.value() {
             let s = self.take_int8()?;
             Ok(s as usize)
-        } else if tars_type == 7 {
+        } else if tars_type == TarsTypeMark::EnString4.value() {
             Ok(self.take_int32()? as usize)
         } else {
             Err(DecodeErr::UnknownTarsTypeErr)
@@ -296,12 +302,12 @@ impl TarsStructDecoder {
     fn take_simple_list(&mut self) -> Result<TarsSimpleList, DecodeErr> {
         let mut v = vec![];
         let head = self.take_head()?;
-        if head.tars_type != 0 {
+        if head.tars_type != TarsTypeMark::EnInt8.value() {
             Err(DecodeErr::WrongSimpleListTarsTypeErr)
         } else {
             let size = self.take_simple_list_size()?;
             let before_pos = self.pos;
-            while self.pos < before_pos + size{
+            while self.pos < before_pos + size {
                 v.push(self.get_u8());
             }
             assert_eq!(self.pos, before_pos + size);
@@ -313,7 +319,7 @@ impl TarsStructDecoder {
         let before_pos = self.pos;
         // 0x0B means (tag, type) => (0, EnStructEnd) => (0, 11)
         let mut head = self.take_head()?;
-        while head.tars_type != 11 {
+        while head.tars_type != TarsTypeMark::EnStructEnd.value() {
             // 递归获取 struct 内部元素大小
             let ele_size = self.take_size(head.tars_type).unwrap();
             // 跳过元素内容
@@ -336,12 +342,12 @@ impl TarsStructDecoder {
     }
 }
 
+#[cfg(test)]
 mod tests {
     use super::TarsStructDecoder;
     use errors::DecodeErr;
     use std::mem;
     use tars_type::TarsType::*;
-    use tars_type::*;
 
     #[test]
     fn test_get() {
@@ -427,9 +433,9 @@ mod tests {
 
     #[test]
     fn test_take_simple_list() {
-        let head: [u8; 4] = unsafe{ mem::transmute(4u32.to_be()) };
+        let head: [u8; 4] = unsafe { mem::transmute(4u32.to_be()) };
         let b: [u8; 9] = [
-            0x00,       // {tag: 0, type: 0}
+            0x00, // {tag: 0, type: 0}
             head[0],
             head[1],
             head[2],

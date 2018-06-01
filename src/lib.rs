@@ -8,4 +8,6 @@ extern crate assert_approx_eq;
 
 pub mod tars_type;
 pub mod tars_decoder;
+pub mod tars_struct;
+pub mod tars_encoder;
 pub mod errors;

@@ -1,7 +1,7 @@
 [package]
 name = "tars-stream"
 version = "0.1.0"
-authors = ["locustchen <locustchen@tencent.com>"]
+authors = ["zerolocust <zerolocust@gmail.com>"]
 
 [dependencies]
 tokio = "0.1"
