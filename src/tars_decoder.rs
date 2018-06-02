@@ -98,10 +98,10 @@ impl TarsStructDecoder {
                 let value = self.take_int16()?;
                 Ok(R::decode_from_bytes(&value))
             }
-            // _ if tars_type == TarsTypeMark::EnInt32.value() => {
-            //     let value = self.take_int32()?;
-            //     Ok(EnInt32(value))
-            // }
+            _ if tars_type == TarsTypeMark::EnInt32.value() => {
+                let value = self.take_int32()?;
+                Ok(R::decode_from_bytes(&value))
+            }
             // _ if tars_type == TarsTypeMark::EnInt64.value() => {
             //     let value = self.take_int64()?;
             //     Ok(EnInt64(value))
@@ -216,13 +216,13 @@ impl TarsStructDecoder {
         }
     }
 
-    // fn take_int32(&mut self) -> Result<i32, DecodeErr> {
-    //     if self.remaining() < 4 {
-    //         Err(DecodeErr::NoEnoughDataErr)
-    //     } else {
-    //         Ok(self.get_i32_be())
-    //     }
-    // }
+    fn take_int32(&mut self) -> Result<Bytes, DecodeErr> {
+        if self.remaining() < 4 {
+            Err(DecodeErr::NoEnoughDataErr)
+        } else {
+            Ok(self.take_then_advance(4))
+        }
+    }
 
     // fn take_int64(&mut self) -> Result<i64, DecodeErr> {
     //     if self.remaining() < 8 {
@@ -250,10 +250,9 @@ impl TarsStructDecoder {
 
     fn take_string_size(&mut self, tars_type: u8) -> Result<usize, DecodeErr> {
         if tars_type == TarsTypeMark::EnString1.value() {
-            let s = self.get_u8();
-            Ok(s as usize)
+            Ok(self.read::<u8>(TarsTypeMark::EnInt8.value())? as usize)
         } else if tars_type == TarsTypeMark::EnString4.value() {
-            Ok(self.get_i32_be() as usize)
+            Ok(self.read::<u32>(TarsTypeMark::EnInt32.value())? as usize)
         } else {
             Err(DecodeErr::UnknownTarsTypeErr)
         }
@@ -268,7 +267,7 @@ impl TarsStructDecoder {
     }
 
     fn take_map_size(&mut self) -> Result<usize, DecodeErr> {
-        Ok(self.get_i32_be() as usize)
+        Ok(self.read::<u32>(TarsTypeMark::EnInt32.value())? as usize)
     }
 
     fn take_map(&mut self, size: usize) -> Result<Bytes, DecodeErr> {
@@ -300,21 +299,13 @@ impl TarsStructDecoder {
     //     Ok(map)
     // }
 
-    // fn take_list_size(&mut self) -> Result<usize, DecodeErr> {
-    //     Ok(self.take_int32()? as usize)
-    // }
+    fn take_list_size(&mut self) -> Result<usize, DecodeErr> {
+        Ok(self.get_i32_be() as usize)
+    }
 
-    // fn take_list(&mut self, size: usize) -> Result<TarsList, DecodeErr> {
-    //     let mut v = vec![];
-    //     let before_pos = self.pos;
-    //     while self.pos < before_pos + size {
-    //         let value_head = self.take_head()?;
-    //         let value = self.read(value_head.tars_type)?;
-    //         v.push(value);
-    //     }
-    //     assert_eq!(self.pos, before_pos + size);
-    //     Ok(v)
-    // }
+    fn take_list(&mut self, size: usize) -> Result<Bytes, DecodeErr> {
+        Ok(self.take_then_advance(size))
+    }
 
     // fn take_simple_list_size(&mut self) -> Result<usize, DecodeErr> {
     //     Ok(self.take_int32()? as usize)
