@@ -23,11 +23,18 @@ impl DecodeFrom for u8 {
     }
 }
 
+impl DecodeFrom for bool {
+    fn decode_from_bytes(b: &Bytes) -> Self {
+        let v = u8::decode_from_bytes(b);
+        v != 0
+    }
+}
+
 impl DecodeFrom for i16 {
     fn decode_from_bytes(b: &Bytes) -> Self {
         let mut cur = Cursor::new(b);
         if b.len() == 1 {
-            cur.get_i8() as i16
+            i16::from(cur.get_i8())
         } else {
             cur.get_i16_be()
         }
@@ -38,7 +45,7 @@ impl DecodeFrom for u16 {
     fn decode_from_bytes(b: &Bytes) -> Self {
         let mut cur = Cursor::new(b);
         if b.len() == 1 {
-            cur.get_u8() as u16
+            u16::from(cur.get_u8())
         } else {
             cur.get_u16_be()
         }
@@ -49,9 +56,9 @@ impl DecodeFrom for i32 {
     fn decode_from_bytes(b: &Bytes) -> Self {
         let mut cur = Cursor::new(b);
         if b.len() == 1 {
-            cur.get_i8() as i32
+            i32::from(cur.get_i8())
         } else if b.len() == 2 {
-            cur.get_i16_be() as i32
+            i32::from(cur.get_i16_be())
         } else {
             cur.get_i32_be()
         }
@@ -62,9 +69,9 @@ impl DecodeFrom for u32 {
     fn decode_from_bytes(b: &Bytes) -> Self {
         let mut cur = Cursor::new(b);
         if b.len() == 1 {
-            cur.get_u8() as u32
+            u32::from(cur.get_u8())
         } else if b.len() == 2 {
-            cur.get_u16_be() as u32
+            u32::from(cur.get_u16_be())
         } else {
             cur.get_u32_be()
         }
@@ -75,11 +82,11 @@ impl DecodeFrom for i64 {
     fn decode_from_bytes(b: &Bytes) -> Self {
         let mut cur = Cursor::new(b);
         if b.len() == 1 {
-            cur.get_i8() as i64
+            i64::from(cur.get_i8())
         } else if b.len() == 2 {
-            cur.get_i16_be() as i64
+            i64::from(cur.get_i16_be())
         } else if b.len() == 4 {
-            cur.get_i32_be() as i64
+            i64::from(cur.get_i32_be())
         } else {
             cur.get_i64_be()
         }
@@ -90,11 +97,11 @@ impl DecodeFrom for u64 {
     fn decode_from_bytes(b: &Bytes) -> Self {
         let mut cur = Cursor::new(b);
         if b.len() == 1 {
-            cur.get_u8() as u64
+            u64::from(cur.get_u8())
         } else if b.len() == 2 {
-            cur.get_u16_be() as u64
+            u64::from(cur.get_u16_be())
         } else if b.len() == 4 {
-            cur.get_u32_be() as u64
+            u64::from(cur.get_u32_be())
         } else {
             cur.get_u64_be()
         }
@@ -136,9 +143,9 @@ impl<K: DecodeFrom + Ord, V: DecodeFrom> DecodeFrom for BTreeMap<K, V> {
     }
 }
 
-// impl<T> DecodeFrom for Vec<T + DecodeFrom> {
+// impl<T: DecodeFrom> DecodeFrom for Vec<T> {
 //     fn decode_from_bytes(b: &Bytes) -> Self {
-//         String::from_utf8(b.to_vec()).unwrap()
+//         // String::from_utf8(b.to_vec()).unwrap()
 //     }
 // }
 

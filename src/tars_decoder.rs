@@ -1,12 +1,9 @@
 use std::collections::BTreeMap;
 use std::io::Cursor;
-use std::rc::Rc;
 
 use bytes::{Buf, Bytes};
 
 use errors::DecodeErr;
-use tars_struct::TarsStruct;
-// use tars_type::TarsType::*;
 use tars_type::TarsTypeMark;
 use tars_type::*;
 
@@ -139,7 +136,10 @@ impl TarsStructDecoder {
             //     let value = self.take_struct(size)?;
             //     Ok(EnStruct(value))
             // }
-            // _ if tars_type == TarsTypeMark::EnZero.value() => Ok(EnInt8(0)),
+            _ if tars_type == TarsTypeMark::EnZero.value() => {
+                let b = Bytes::from(&b"\0"[..]);
+                Ok(R::decode_from_bytes(&b))
+            }
             // // TODO: add more test
             // _ if tars_type == TarsTypeMark::EnSimplelist.value() => {
             //     let value = self.take_simple_list()?;
@@ -156,15 +156,16 @@ impl TarsStructDecoder {
             let b = self.get_u8();
             let tars_type = b & 0x0f;
             let mut tag = (b & 0xf0) >> 4;
-            let mut len = 1;
-            if tag >= 15 {
+            let len = if tag < 15 {
+                1
+            } else {
                 tag = self.get_u8();
-                len = 2;
-            }
+                2
+            };
             Ok(Head {
-                tag: tag,
-                len: len,
-                tars_type: tars_type,
+                tag,
+                len,
+                tars_type,
             })
         }
     }

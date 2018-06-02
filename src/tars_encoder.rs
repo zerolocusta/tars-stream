@@ -1,7 +1,7 @@
 use bytes::{BufMut, BytesMut};
 use tars_type::TarsTypeMark;
 use tars_type::TarsTypeMark::*;
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct TarsStructEncoder {
     buf: BytesMut,
 }
@@ -18,7 +18,7 @@ impl<'a> TarsStructEncoder {
             let head = (tag << 4) | tars_type.value();
             self.buf.put_u8(head);
         } else {
-            let head: u16 = (((0xF0u8) | tars_type.value()) as u16) << 8 | tag as u16;
+            let head: u16 = u16::from((0xF0u8) | tars_type.value()) << 8 | u16::from(tag);
             self.buf.put_u16_be(head)
         }
     }
