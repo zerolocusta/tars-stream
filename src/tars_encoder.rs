@@ -1,6 +1,7 @@
 use bytes::{BufMut, BytesMut};
 use tars_type::TarsTypeMark;
 use tars_type::TarsTypeMark::*;
+
 #[derive(Debug, Default)]
 pub struct TarsStructEncoder {
     buf: BytesMut,
@@ -36,6 +37,10 @@ impl<'a> TarsStructEncoder {
     pub fn to_bytes_ref(&self) -> &BytesMut {
         &self.buf
     }
+}
+
+pub trait EncodeTo {
+    fn encode_to_bytes(&self) -> BytesMut;
 }
 
 #[cfg(test)]
