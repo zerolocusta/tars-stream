@@ -46,6 +46,7 @@ impl TarsDecoder {
         let mut result: Option<Head> = None;
         while self.has_remaining() {
             let head = self.take_head()?;
+            println!("{:?}", head);
             if head.tag == tag {
                 result = Some(head);
                 break;
@@ -73,6 +74,7 @@ impl TarsDecoder {
                 } else {
                     let size = self.take_size(tars_type)?;
                     let value = self.take_then_advance(size)?;
+                    // let _ = self.take_then_advance(1)?;
                     Ok(R::simple_list_from_bytes(&value))
                 }
             }
@@ -310,6 +312,15 @@ impl DecodeFrom for String {
     }
 }
 
+// from struct decoding
+impl<'a> DecodeFrom for Bytes {
+    fn decode_from_bytes(b: &Bytes) -> Self {
+        // clone will not copy [u8]
+        Bytes::from(&b[0..b.len() - 1])
+        // b.clone()
+    }
+}
+
 impl<K: DecodeFrom + Ord, V: DecodeFrom> DecodeFrom for BTreeMap<K, V> {
     fn decode_from_bytes(b: &Bytes) -> Self {
         let mut map = BTreeMap::new();
@@ -350,94 +361,144 @@ impl<T: DecodeFrom> DecodeFrom for Vec<T> {
 
 #[cfg(test)]
 mod tests {
-    use super::TarsDecoder;
+    use super::{DecodeFrom, TarsDecoder};
+    use bytes::{Buf, Bytes};
     use errors::DecodeErr;
     use std::collections::BTreeMap;
     use std::mem;
     use tars_type::TarsTypeMark;
 
-    //     #[test]
-    //     fn test_get() {
-    //         let d: [u8; 44] = [
-    //             // {tag: 1, type: 6}
-    //             0x16,
-    //             7,
-    //             b'f',
-    //             b'o',
-    //             b'o',
-    //             b' ',
-    //             b'b',
-    //             b'a',
-    //             b'r',
-    //             // {tag: 2, type: 6}
-    //             0x26,
-    //             7,
-    //             b'f',
-    //             b'o',
-    //             b'o',
-    //             b' ',
-    //             b'b',
-    //             b'a',
-    //             b'r',
-    //             // {tag: 3, type: 0}
-    //             0x30,
-    //             8,
-    //             // {tag: 4, type: 10} start inner struct
-    //             0x4A,
-    //             // {struct: {tag: 1, type: 6} }
-    //             0x16,
-    //             7,
-    //             b'f',
-    //             b'o',
-    //             b'o',
-    //             b' ',
-    //             b'b',
-    //             b'a',
-    //             b'r',
-    //             // {struct: {tag: 2, type: 6} }
-    //             0x26,
-    //             7,
-    //             b'f',
-    //             b'o',
-    //             b'o',
-    //             b' ',
-    //             b'b',
-    //             b'a',
-    //             b'r',
-    //             // {struct: {tag: 3, type: 6} }
-    //             0x30,
-    //             8,
-    //             // StructEnd
-    //             0x0B,
-    //             // {struct: {tag: 5, type: 6} }
-    //             0x50,
-    //             16,
-    //         ];
+    #[derive(Clone, Debug)]
+    struct TestStruct {
+        a: i8,       // tag 0
+        b: u16,      // tag 1
+        v1: Vec<u8>, // tag 2
+    }
 
-    //         let mut de = TarsDecoder::new(&d);
+    #[derive(Clone, Debug)]
+    struct TestStruct2 {
+        f: f32,                   // 0
+        s: TestStruct,               // 1
+        m: BTreeMap<String, String>, // 2
+        s2: TestStruct,              // 3
+    }
 
-    //         for _ in 0..10 {
-    //             assert_eq!(de.get(1), Ok(EnString(String::from(&"foo bar"[..]))));
-    //             assert_eq!(de.get(2), Ok(EnString(String::from(&"foo bar"[..]))));
-    //             assert_eq!(de.get(3), Ok(EnInt8(8)));
-    //             assert_eq!(de.get(5), Ok(EnInt8(16)));
+    impl DecodeFrom for TestStruct2 {
+        fn decode_from_bytes(b: &Bytes) -> Self {
+            let mut de = TarsDecoder::new(&b);
+            let s = TestStruct::decode_from_bytes(&de.get(1).unwrap());
+            let s2 = TestStruct::decode_from_bytes(&de.get(3).unwrap());
+            let m = de.get(2).unwrap();
+            let f = de.get(0).unwrap();
+            TestStruct2 { f, s, m, s2 }
+        }
+    }
 
-    //             let mut inner_struct = de.get(4).unwrap().unwrap_struct().unwrap();
-    //             let mut inner_struct_de = TarsDecoder::new(&inner_struct);
-    //             assert_eq!(
-    //                 inner_struct_de.get(1),
-    //                 Ok(EnString(String::from(&"foo bar"[..])))
-    //             );
-    //             assert_eq!(
-    //                 inner_struct_de.get(2),
-    //                 Ok(EnString(String::from(&"foo bar"[..])))
-    //             );
-    //             assert_eq!(inner_struct_de.get(3), Ok(EnInt8(8)));
-    //             assert_eq!(de.get(0), Err(DecodeErr::TagNotFoundErr));
-    //             assert_eq!(de.get(200), Err(DecodeErr::TagNotFoundErr));
-    //             assert_eq!(de.get(255), Err(DecodeErr::TagNotFoundErr));
-    //         }
-    //     }
+    impl DecodeFrom for TestStruct {
+        fn decode_from_bytes(b: &Bytes) -> Self {
+            println!("{:?}", b);
+            let mut de = TarsDecoder::new(&b);
+            let a = de.get(0).unwrap();
+            let b = de.get(1).unwrap();
+            let v1 = de.get(2).unwrap();
+            TestStruct { a, b, v1 }
+        }
+    }
+
+    #[test]
+    fn test_decode_struct() {
+        let i8_field_0: i8 = 0xff;
+
+        let u16_field_1: [u8; 2] = unsafe { mem::transmute(0x0acbi16.to_be()) };
+
+        let list_head_2: [u8; 4] = unsafe { mem::transmute(4u32.to_be()) };
+        let list_field_2: Vec<u8> = vec![4, 5, 6, 7];
+
+        let buf: [u8; 15] = [
+            0x00, // {i8 field start, tag 0}
+            i8_field_0 as u8,
+            0x11, // {u16 field start, tag 1}
+            u16_field_1[0],
+            u16_field_1[1],
+            0x2d, // {simple list field start, tag 2}
+            0x00,
+            list_head_2[0],
+            list_head_2[1],
+            list_head_2[2],
+            list_head_2[3],
+            list_field_2[0],
+            list_field_2[1],
+            list_field_2[2],
+            list_field_2[3], // {simple list field end}
+        ];
+
+        let s = TestStruct::decode_from_bytes(&Bytes::from(&buf[..]));
+        assert_eq!(s.a, i8_field_0);
+        assert_eq!(s.b, 0x0acbi16 as u16);
+        assert_eq!(s.v1, list_field_2);
+
+        let size: [u8; 4] = unsafe { mem::transmute(22u32.to_be()) };
+        let map_field: [u8; 26] = [
+            size[0],
+            size[1],
+            size[2],
+            size[3],
+            // {tag: 0, type: 6}
+            0x06,
+            7,
+            b'f',
+            b'o',
+            b'o',
+            b' ',
+            b'b',
+            b'a',
+            b'r',
+            // {tag: 0, type: 6}
+            0x06,
+            11,
+            b'h',
+            b'e',
+            b'l',
+            b'l',
+            b'o',
+            b' ',
+            b'w',
+            b'o',
+            b'r',
+            b'l',
+            b'd',
+        ];
+
+        let float_field: [u8; 4] = unsafe{ mem::transmute(0.332134f32.to_bits().to_be()) };
+
+        let mut bytes1 = Bytes::new();
+        bytes1.extend_from_slice(&b"\x1a"[..]); // struct begin, tag 1
+        bytes1.extend_from_slice(&buf); // struct begin, tag 1
+        bytes1.extend_from_slice(&b"\x0b"[..]); // struct begin, tag 1
+
+        bytes1.extend_from_slice(&b"\x3a"[..]); // struct begin, tag 3
+        bytes1.extend_from_slice(&buf); // struct begin, tag 1
+        bytes1.extend_from_slice(&b"\x0b"[..]); // struct begin, tag 3
+
+        bytes1.extend_from_slice(&b"\x28"[..]);
+        bytes1.extend_from_slice(&map_field);
+
+        bytes1.extend_from_slice(&b"\x04"[..]);
+        bytes1.extend_from_slice(&float_field);
+
+        let s2 = TestStruct2::decode_from_bytes(&bytes1);
+        assert_eq!(s2.s.a, i8_field_0);
+        assert_eq!(s2.s.b, 0x0acbi16 as u16);
+        assert_eq!(s2.s.v1, list_field_2);
+        assert_eq!(s2.s2.a, i8_field_0);
+        assert_eq!(s2.s2.b, 0x0acbi16 as u16);
+        assert_eq!(s2.s2.v1, list_field_2);
+
+        let value2 = s2.m.get(&String::from(&"foo bar"[..])).unwrap();
+        assert_eq!(value2, &String::from(&"hello world"[..]));
+
+        assert_approx_eq!(s2.f, 0.332134f32);
+    }
 
     #[test]
     fn test_take_simple_list() {
@@ -621,7 +682,6 @@ mod tests {
 
         for i in 0..10 as u8 {
             assert_eq!(de3.get::<i16>(i), Ok(value));
-            println!("hello");
         }
     }
 
@@ -663,7 +723,7 @@ mod tests {
     }
 
     #[test]
-    fn test_take_double() {
+    fn test_decode_double() {
         let b2: [u8; 8] = unsafe { mem::transmute(0.633313f64.to_bits().to_be()) };
         let mut de2 = TarsDecoder::new(&b2[..]);
         let f: f64 = de2.read(TarsTypeMark::EnDouble.value()).unwrap();
@@ -671,7 +731,7 @@ mod tests {
     }
 
     #[test]
-    fn test_take_float() {
+    fn test_decode_float() {
         let b2: [u8; 4] = unsafe { mem::transmute(0.35524f32.to_bits().to_be()) };
         let mut de2 = TarsDecoder::new(&b2[..]);
         let f: f32 = de2.read(TarsTypeMark::EnFloat.value()).unwrap();
@@ -706,137 +766,4 @@ mod tests {
         let mut de3 = TarsDecoder::new(&d3);
         assert_eq!(de3.get(0), Ok(String::from(&"foo bar"[..])));
     }
-
-    // #[test]
-    // fn test_take_struct() {
-    //     let d: [u8; 42] = [
-    //         // {tag: 1, type: 6}
-    //         0x16,
-    //         7,
-    //         b'f',
-    //         b'o',
-    //         b'o',
-    //         b' ',
-    //         b'b',
-    //         b'a',
-    //         b'r',
-    //         // {tag: 2, type: 6}
-    //         0x26,
-    //         7,
-    //         b'f',
-    //         b'o',
-    //         b'o',
-    //         b' ',
-    //         b'b',
-    //         b'a',
-    //         b'r',
-    //         // {tag: 3, type: 0}
-    //         0x30,
-    //         8,
-    //         // StructEnd
-    //         0x0B,
-    //         // {tag: 4, type: 6}
-    //         0x46,
-    //         7,
-    //         b'f',
-    //         b'o',
-    //         b'o',
-    //         b' ',
-    //         b'b',
-    //         b'a',
-    //         b'r',
-    //         // {tag: 5, type: 6}
-    //         0x56,
-    //         7,
-    //         b'f',
-    //         b'o',
-    //         b'o',
-    //         b' ',
-    //         b'b',
-    //         b'a',
-    //         b'r',
-    //         // {tag: 6, type: 0}
-    //         0x60,
-    //         8,
-    //         // StructEnd
-    //         0x0B,
-    //     ];
-    //     let mut de = TarsDecoder::new(&d);
-
-    //     let struct_size = de.take_struct_size().unwrap();
-    //     match de.take_struct(struct_size) {
-    //         Ok(inner_struct) => {
-    //             let mut inner_struct_de = TarsDecoder::new(&inner_struct);
-    //             assert_eq!(
-    //                 inner_struct_de.get(1),
-    //                 Ok(EnString(String::from(&"foo bar"[..])))
-    //             );
-    //             assert_eq!(
-    //                 inner_struct_de.get(2),
-    //                 Ok(EnString(String::from(&"foo bar"[..])))
-    //             );
-    //             assert_eq!(inner_struct_de.get(3), Ok(EnInt8(8)));
-    //         }
-    //         Err(_) => assert!(false),
-    //     }
-
-    //     let struct_size = de.take_struct_size().unwrap();
-    //     match de.take_struct(struct_size) {
-    //         Ok(inner_struct) => {
-    //             let mut inner_struct_de = TarsDecoder::new(&inner_struct);
-    //             assert_eq!(
-    //                 inner_struct_de.get(4),
-    //                 Ok(EnString(String::from(&"foo bar"[..])))
-    //             );
-    //             assert_eq!(
-    //                 inner_struct_de.get(5),
-    //                 Ok(EnString(String::from(&"foo bar"[..])))
-    //             );
-    //             assert_eq!(inner_struct_de.get(6), Ok(EnInt8(8)));
-    //         }
-    //         Err(_) => assert!(false),
-    //     }
-
-    //     // take_struct() won't consume header
-    //     let mut d2: Vec<u8> = vec![];
-    //     // insert {tag:0, type: 11}
-    //     // 三层嵌套 struct
-    //     d2.push(0x0A);
-    //     d2.push(0x0A);
-    //     d2.extend_from_slice(&d[0..21]);
-    //     d2.push(0x0B);
-    //     d2.push(0x0B);
-    //     let mut de2 = TarsDecoder::new(&d2);
-    //     let struct_size = de2.take_struct_size().unwrap();
-    //     match de2.take_struct(struct_size) {
-    //         Ok(struct_1) => {
-    //             println!("\nstruct_1: {:?}\n", struct_1);
-    //             // 获取首层
-    //             let mut inner_de = TarsDecoder::new(&struct_1);
-    //             println!("inner_de: {:?}\n", inner_de);
-
-    //             let mut inner_struct = inner_de.get(0).unwrap().unwrap_struct().unwrap();
-    //             println!("inner_struct: {:?}\n", inner_struct);
-
-    //             // 获取第二层
-    //             let mut inner_de2 = TarsDecoder::new(&inner_struct);
-    //             println!("inner_de2: {:?}\n", inner_de2);
-
-    //             let mut inner_struct2 = inner_de2.get(0).unwrap().unwrap_struct().unwrap();
-    //             println!("inner_struct2: {:?}\n", inner_struct);
-
-    //             // 获取第三层
-    //             let mut inner_de3 = TarsDecoder::new(&inner_struct2);
-    //             println!("inner_de2: {:?}\n", inner_de2);
-
-    //             // let mut inner_struct3 = inner_de2.get(0).unwrap().unwrap_struct().unwrap();
-    //             // println!("inner_struct3: {:?}\n", inner_struct3);
-
-    //             assert_eq!(inner_de3.get(1), Ok(EnString(String::from(&"foo bar"[..]))));
-    //             assert_eq!(inner_de3.get(2), Ok(EnString(String::from(&"foo bar"[..]))));
-    //             assert_eq!(inner_de3.get(3), Ok(EnInt8(8)));
-    //         }
-    //         Err(_) => assert!(false),
-    //     }
-    // }
 }
