@@ -65,7 +65,7 @@ impl TarsDecoder {
         match tars_type {
             _ if tars_type == TarsTypeMark::EnZero.value() => {
                 let b = Bytes::from(&b"\0"[..]);
-                Ok(R::decode_from_bytes(&b))
+                Ok(R::decode_from_bytes(&b)?)
             }
             _ if tars_type == TarsTypeMark::EnSimplelist.value() => {
                 let head = self.take_head()?; // consume header (list type)
@@ -75,13 +75,13 @@ impl TarsDecoder {
                     let size = self.take_size(tars_type)?;
                     let value = self.take_then_advance(size)?;
                     // let _ = self.take_then_advance(1)?;
-                    Ok(R::simple_list_from_bytes(&value))
+                    Ok(R::simple_list_from_bytes(&value)?)
                 }
             }
             _ => {
                 let size = self.take_size(tars_type)?;
                 let value = self.take_then_advance(size)?;
-                Ok(R::decode_from_bytes(&value))
+                Ok(R::decode_from_bytes(&value)?)
             }
         }
     }
@@ -184,8 +184,9 @@ impl TarsDecoder {
 }
 
 pub trait DecodeFrom {
-    fn decode_from_bytes(&Bytes) -> Self;
-    fn simple_list_from_bytes(&Bytes) -> Self
+    fn decode_from_bytes(&Bytes) -> Result<Self, DecodeErr>
+        where Self: Sized;
+    fn simple_list_from_bytes(&Bytes) -> Result<Self, DecodeErr>
     where
         Self: Sized,
     {
@@ -194,175 +195,175 @@ pub trait DecodeFrom {
 }
 
 impl DecodeFrom for i8 {
-    fn decode_from_bytes(b: &Bytes) -> Self {
+    fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
         let mut cur = Cursor::new(b);
-        cur.get_i8()
+        Ok(cur.get_i8())
     }
 }
 
 impl DecodeFrom for u8 {
-    fn decode_from_bytes(b: &Bytes) -> Self {
+    fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
         let mut cur = Cursor::new(b);
-        cur.get_u8()
+        Ok(cur.get_u8())
     }
 }
 
 impl DecodeFrom for bool {
-    fn decode_from_bytes(b: &Bytes) -> Self {
-        let v = u8::decode_from_bytes(b);
-        v != 0
+    fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
+        let v = u8::decode_from_bytes(b)?;
+        Ok(v != 0)
     }
 }
 
 impl DecodeFrom for i16 {
-    fn decode_from_bytes(b: &Bytes) -> Self {
+    fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
         let mut cur = Cursor::new(b);
         if b.len() == 1 {
-            i16::from(cur.get_i8())
+            Ok(i16::from(cur.get_i8()))
         } else {
-            cur.get_i16_be()
+            Ok(cur.get_i16_be())
         }
     }
 }
 
 impl DecodeFrom for u16 {
-    fn decode_from_bytes(b: &Bytes) -> Self {
+    fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
         let mut cur = Cursor::new(b);
         if b.len() == 1 {
-            u16::from(cur.get_u8())
+            Ok(u16::from(cur.get_u8()))
         } else {
-            cur.get_u16_be()
+            Ok(cur.get_u16_be())
         }
     }
 }
 
 impl DecodeFrom for i32 {
-    fn decode_from_bytes(b: &Bytes) -> Self {
+    fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
         let mut cur = Cursor::new(b);
         if b.len() == 1 {
-            i32::from(cur.get_i8())
+            Ok(i32::from(cur.get_i8()))
         } else if b.len() == 2 {
-            i32::from(cur.get_i16_be())
+            Ok(i32::from(cur.get_i16_be()))
         } else {
-            cur.get_i32_be()
+            Ok(cur.get_i32_be())
         }
     }
 }
 
 impl DecodeFrom for u32 {
-    fn decode_from_bytes(b: &Bytes) -> Self {
+    fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
         let mut cur = Cursor::new(b);
         if b.len() == 1 {
-            u32::from(cur.get_u8())
+            Ok(u32::from(cur.get_u8()))
         } else if b.len() == 2 {
-            u32::from(cur.get_u16_be())
+            Ok(u32::from(cur.get_u16_be()))
         } else {
-            cur.get_u32_be()
+            Ok(cur.get_u32_be())
         }
     }
 }
 
 impl DecodeFrom for i64 {
-    fn decode_from_bytes(b: &Bytes) -> Self {
+    fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
         let mut cur = Cursor::new(b);
         if b.len() == 1 {
-            i64::from(cur.get_i8())
+            Ok(i64::from(cur.get_i8()))
         } else if b.len() == 2 {
-            i64::from(cur.get_i16_be())
+            Ok(i64::from(cur.get_i16_be()))
         } else if b.len() == 4 {
-            i64::from(cur.get_i32_be())
+            Ok(i64::from(cur.get_i32_be()))
         } else {
-            cur.get_i64_be()
+            Ok(cur.get_i64_be())
         }
     }
 }
 
 impl DecodeFrom for u64 {
-    fn decode_from_bytes(b: &Bytes) -> Self {
+    fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
         let mut cur = Cursor::new(b);
         if b.len() == 1 {
-            u64::from(cur.get_u8())
+            Ok(u64::from(cur.get_u8()))
         } else if b.len() == 2 {
-            u64::from(cur.get_u16_be())
+            Ok(u64::from(cur.get_u16_be()))
         } else if b.len() == 4 {
-            u64::from(cur.get_u32_be())
+            Ok(u64::from(cur.get_u32_be()))
         } else {
-            cur.get_u64_be()
+            Ok(cur.get_u64_be())
         }
     }
 }
 
 impl DecodeFrom for f32 {
-    fn decode_from_bytes(b: &Bytes) -> Self {
+    fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
         let mut cur = Cursor::new(b);
-        cur.get_f32_be()
+        Ok(cur.get_f32_be())
     }
 }
 
 impl DecodeFrom for f64 {
-    fn decode_from_bytes(b: &Bytes) -> Self {
+    fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
         let mut cur = Cursor::new(b);
-        cur.get_f64_be()
+        Ok(cur.get_f64_be())
     }
 }
 
 impl DecodeFrom for String {
-    fn decode_from_bytes(b: &Bytes) -> Self {
-        String::from_utf8(b.to_vec()).unwrap()
+    fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
+        Ok(String::from_utf8(b.to_vec()).unwrap())
     }
 }
 
 // from struct decoding
 impl<'a> DecodeFrom for Bytes {
-    fn decode_from_bytes(b: &Bytes) -> Self {
+    fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
         // clone will not copy [u8]
-        Bytes::from(&b[0..b.len() - 1])
+        Ok(Bytes::from(&b[0..b.len() - 1]))
         // b.clone()
     }
 }
 
 impl<K: DecodeFrom + Ord, V: DecodeFrom> DecodeFrom for BTreeMap<K, V> {
-    fn decode_from_bytes(b: &Bytes) -> Self {
+    fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
         let mut map = BTreeMap::new();
         let mut decoder = TarsDecoder::new(&b);
         while decoder.has_remaining() {
-            let key_head = decoder.take_head().unwrap();
-            let key = decoder.read::<K>(key_head.tars_type).unwrap();
-            let value_head = decoder.take_head().unwrap();
-            let value = decoder.read::<V>(value_head.tars_type).unwrap();
+            let key_head = decoder.take_head()?;
+            let key = decoder.read::<K>(key_head.tars_type)?;
+            let value_head = decoder.take_head()?;
+            let value = decoder.read::<V>(value_head.tars_type)?;
             map.insert(key, value);
         }
-        map
+        Ok(map)
     }
 }
 
 impl<T: DecodeFrom> DecodeFrom for Vec<T> {
-    fn decode_from_bytes(b: &Bytes) -> Self {
+    fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
         let mut v = vec![];
         let mut decoder = TarsDecoder::new(&b);
         while decoder.has_remaining() {
-            let ele_type = decoder.take_head().unwrap();
-            let ele = decoder.read::<T>(ele_type.tars_type).unwrap();
+            let ele_type = decoder.take_head()?;
+            let ele = decoder.read::<T>(ele_type.tars_type)?;
             v.push(ele);
         }
-        v
+        Ok(v)
     }
 
-    fn simple_list_from_bytes(b: &Bytes) -> Self {
+    fn simple_list_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
         let mut v: Vec<T> = vec![];
         let mut decoder = TarsDecoder::new(&b);
         while decoder.has_remaining() {
-            let ele = decoder.read::<T>(TarsTypeMark::EnInt8.value()).unwrap();
+            let ele = decoder.read::<T>(TarsTypeMark::EnInt8.value())?;
             v.push(ele)
         }
-        v
+        Ok(v)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::{DecodeFrom, TarsDecoder};
-    use bytes::{Buf, Bytes};
+    use bytes::Bytes;
     use errors::DecodeErr;
     use std::collections::BTreeMap;
     use std::mem;
@@ -384,30 +385,30 @@ mod tests {
     }
 
     impl DecodeFrom for TestStruct2 {
-        fn decode_from_bytes(b: &Bytes) -> Self {
+        fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
             let mut de = TarsDecoder::new(&b);
-            let s = TestStruct::decode_from_bytes(&de.get(1).unwrap());
-            let s2 = TestStruct::decode_from_bytes(&de.get(3).unwrap());
-            let m = de.get(2).unwrap();
-            let f = de.get(0).unwrap();
-            TestStruct2 { f, s, m, s2 }
+            let s = TestStruct::decode_from_bytes(&de.get(1)?)?;
+            let s2 = TestStruct::decode_from_bytes(&de.get(3)?)?;
+            let m = de.get(2)?;
+            let f = de.get(0)?;
+            Ok(TestStruct2 { f, s, m, s2 })
         }
     }
 
     impl DecodeFrom for TestStruct {
-        fn decode_from_bytes(b: &Bytes) -> Self {
+        fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
             println!("{:?}", b);
             let mut de = TarsDecoder::new(&b);
-            let a = de.get(0).unwrap();
-            let b = de.get(1).unwrap();
-            let v1 = de.get(2).unwrap();
-            TestStruct { a, b, v1 }
+            let a = de.get(0)?;
+            let b = de.get(1)?;
+            let v1 = de.get(2)?;
+            Ok(TestStruct { a, b, v1 })
         }
     }
 
     #[test]
     fn test_decode_struct() {
-        let i8_field_0: i8 = 0xff;
+        let i8_field_0: i8 = -127;
 
         let u16_field_1: [u8; 2] = unsafe { mem::transmute(0x0acbi16.to_be()) };
 
@@ -432,7 +433,7 @@ mod tests {
             list_field_2[3], // {simple list field end}
         ];
 
-        let s = TestStruct::decode_from_bytes(&Bytes::from(&buf[..]));
+        let s = TestStruct::decode_from_bytes(&Bytes::from(&buf[..])).unwrap();
         assert_eq!(s.a, i8_field_0);
         assert_eq!(s.b, 0x0acbi16 as u16);
         assert_eq!(s.v1, list_field_2);
@@ -486,7 +487,7 @@ mod tests {
         bytes1.extend_from_slice(&b"\x04"[..]);
         bytes1.extend_from_slice(&float_field);
 
-        let s2 = TestStruct2::decode_from_bytes(&bytes1);
+        let s2 = TestStruct2::decode_from_bytes(&bytes1).unwrap();
         assert_eq!(s2.s.a, i8_field_0);
         assert_eq!(s2.s.b, 0x0acbi16 as u16);
         assert_eq!(s2.s.v1, list_field_2);

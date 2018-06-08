@@ -15,6 +15,7 @@ quick_error!{
         }
     }
 }
+
 quick_error!{
     #[derive(Debug, PartialEq, Eq)]
     pub enum TarsTypeErr{
@@ -24,3 +25,11 @@ quick_error!{
     }
 }
 
+quick_error!{
+    #[derive(Debug, PartialEq, Eq)]
+    pub enum EncodeErr{
+        TooBigTagErr{
+            description("encoder: tag too big, max value is 255")
+        }
+    }
+}
