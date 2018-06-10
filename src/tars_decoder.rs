@@ -1,4 +1,3 @@
-use std::borrow::Borrow;
 use std::collections::BTreeMap;
 use std::io::Cursor;
 
@@ -320,8 +319,9 @@ impl DecodeFrom for f64 {
 
 impl DecodeFrom for String {
     fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
+        // handle invalid utf8 character
         let cow = String::from_utf8_lossy(&b);
-        Ok(String::from(cow.borrow()))
+        Ok(String::from(cow))
     }
 }
 

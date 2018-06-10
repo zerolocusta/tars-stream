@@ -1,9 +1,12 @@
 use bytes::{BufMut, BytesMut};
 use errors::EncodeErr;
+use std::mem;
 use std::convert::TryFrom;
 use tars_type::TarsTypeMark;
 use tars_type::TarsTypeMark::*;
 
+const MAX_HEADER_LEN: usize = 2;
+const MAX_SIZE_LEN: usize = 4;
 fn put_head(buf: &mut BytesMut, tag: u8, tars_type: TarsTypeMark) -> Result<(), EncodeErr> {
     if tag > u8::max_value() {
         Err(EncodeErr::TooBigTagErr)
@@ -16,6 +19,13 @@ fn put_head(buf: &mut BytesMut, tag: u8, tars_type: TarsTypeMark) -> Result<(), 
             buf.put_u16_be(head)
         }
         Ok(())
+    }
+}
+
+fn check_maybe_resize(buf: &mut BytesMut, len: usize) {
+    if buf.remaining_mut() < len {
+        let new_len = buf.remaining_mut() + len + 1;
+        buf.reserve(new_len)
     }
 }
 
@@ -32,6 +42,7 @@ pub trait EncodeTo {
 
 impl EncodeTo for i8 {
     fn encode_into_bytes(&self, tag: u8, buf: &mut BytesMut) -> Result<(), EncodeErr> {
+        check_maybe_resize(buf, MAX_HEADER_LEN + mem::size_of::<i8>());
         put_head(buf, tag, EnInt8)?;
         buf.put_i8(*self);
         Ok(())
@@ -40,6 +51,7 @@ impl EncodeTo for i8 {
 
 impl EncodeTo for u8 {
     fn encode_into_bytes(&self, tag: u8, buf: &mut BytesMut) -> Result<(), EncodeErr> {
+        check_maybe_resize(buf, MAX_HEADER_LEN + mem::size_of::<u8>());
         put_head(buf, tag, EnInt8)?;
         buf.put_u8(*self);
         Ok(())
@@ -51,6 +63,7 @@ impl EncodeTo for i16 {
         if *self >= i16::from(i8::min_value()) && *self <= i16::from(i8::max_value()) {
             (*self as i8).encode_into_bytes(tag, buf)?;
         } else {
+            check_maybe_resize(buf, MAX_HEADER_LEN + mem::size_of::<i16>());
             put_head(buf, tag, EnInt16)?;
             buf.put_i16_be(*self);
         }
@@ -63,6 +76,7 @@ impl EncodeTo for u16 {
         if *self >= u16::from(u8::min_value()) && *self <= u16::from(u8::max_value()) {
             (*self as u8).encode_into_bytes(tag, buf)?;
         } else {
+            check_maybe_resize(buf, MAX_HEADER_LEN + mem::size_of::<u16>());
             put_head(buf, tag, EnInt16)?;
             buf.put_u16_be(*self);
         }
@@ -75,6 +89,7 @@ impl EncodeTo for i32 {
         if *self >= i32::from(i16::min_value()) && *self <= i32::from(i16::max_value()) {
             (*self as i16).encode_into_bytes(tag, buf)?;
         } else {
+            check_maybe_resize(buf, MAX_HEADER_LEN + mem::size_of::<i32>());
             put_head(buf, tag, EnInt32)?;
             buf.put_i32_be(*self);
         }
@@ -87,6 +102,7 @@ impl EncodeTo for u32 {
         if *self >= u32::from(u16::min_value()) && *self <= u32::from(u16::max_value()) {
             (*self as u16).encode_into_bytes(tag, buf)?;
         } else {
+            check_maybe_resize(buf, MAX_HEADER_LEN + mem::size_of::<u32>());
             put_head(buf, tag, EnInt32)?;
             buf.put_u32_be(*self);
         }
@@ -99,6 +115,7 @@ impl EncodeTo for i64 {
         if *self >= i64::from(i32::min_value()) && *self <= i64::from(i32::max_value()) {
             (*self as i32).encode_into_bytes(tag, buf)?;
         } else {
+            check_maybe_resize(buf, MAX_HEADER_LEN + mem::size_of::<i64>());
             put_head(buf, tag, EnInt64)?;
             buf.put_i64_be(*self);
         }
@@ -111,6 +128,7 @@ impl EncodeTo for u64 {
         if *self >= u64::from(u32::min_value()) && *self <= u64::from(u32::max_value()) {
             (*self as u32).encode_into_bytes(tag, buf)?;
         } else {
+            check_maybe_resize(buf, MAX_HEADER_LEN + mem::size_of::<u64>());
             put_head(buf, tag, EnInt64)?;
             buf.put_u64_be(*self);
         }
@@ -120,6 +138,7 @@ impl EncodeTo for u64 {
 
 impl EncodeTo for f32 {
     fn encode_into_bytes(&self, tag: u8, buf: &mut BytesMut) -> Result<(), EncodeErr> {
+        check_maybe_resize(buf, MAX_HEADER_LEN + mem::size_of::<f32>());
         put_head(buf, tag, EnFloat)?;
         buf.put_f32_be(*self);
         Ok(())
@@ -128,6 +147,7 @@ impl EncodeTo for f32 {
 
 impl EncodeTo for f64 {
     fn encode_into_bytes(&self, tag: u8, buf: &mut BytesMut) -> Result<(), EncodeErr> {
+        check_maybe_resize(buf, MAX_HEADER_LEN + mem::size_of::<f64>());
         put_head(buf, tag, EnDouble)?;
         buf.put_f64_be(*self);
         Ok(())
@@ -137,6 +157,7 @@ impl EncodeTo for f64 {
 impl EncodeTo for String {
     fn encode_into_bytes(&self, tag: u8, buf: &mut BytesMut) -> Result<(), EncodeErr> {
         let len = self.len();
+        check_maybe_resize(buf, MAX_HEADER_LEN + MAX_SIZE_LEN + len);
         if len <= usize::from(u8::max_value()) {
             put_head(buf, tag, EnString1)?;
             match u8::try_from(len) {
@@ -187,8 +208,8 @@ mod tests {
         let mut buf = BytesMut::new();
         let a: Option<i64> = Some(-1337);
         let b: Option<i64> = None;
-        a.encode_into_bytes(0, &mut buf);
-        b.encode_into_bytes(1, &mut buf);
+        a.encode_into_bytes(0, &mut buf).unwrap();
+        b.encode_into_bytes(1, &mut buf).unwrap();
 
         assert_eq!(&buf[..], &b"\x01\xfa\xc7"[..]);
     }
@@ -363,11 +384,24 @@ mod tests {
         let f1: f64 = 0.14723333;
         println!("{:x}", f1.to_bits());
         f1.encode_into_bytes(0, &mut buf).unwrap();
-        assert_eq!(&buf[..], &b"\x05\x3f\xc2\xd8\x8a\xb0\x9d\x97\x2a"[..]);
+        assert_eq!(&buf, &b"\x05\x3f\xc2\xd8\x8a\xb0\x9d\x97\x2a"[..]);
     }
 
-    // fn test_encode_string() {
-    //     let mut buf = BytesMut::new();
-    //     let s: String = "hello wrold!";
-    // }
+    #[test]
+    fn test_encode_string() {
+        let mut buf = BytesMut::new();
+        let s: String = "hello wrold!".to_string();
+        let expect_buf = "\x06\x0c".to_string() + &s;
+        s.encode_into_bytes(0, &mut buf).unwrap();
+        assert_eq!(&buf, &expect_buf);
+
+        let mut buf = BytesMut::new();
+        let mut s1: String = String::new();
+        for _ in 0..0xf7f7f {
+            s1.push('z');
+        }
+        let expect_buf = "\x07\x00\x0f\x7f\x7f".to_string() + &s1;
+        s1.encode_into_bytes(0, &mut buf).unwrap();
+        assert_eq!(&buf, &expect_buf);
+    }
 }
