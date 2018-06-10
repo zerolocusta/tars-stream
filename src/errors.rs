@@ -31,5 +31,11 @@ quick_error!{
         TooBigTagErr{
             description("encoder: tag too big, max value is 255")
         }
+        ConvertU8Err{
+            description("encoder: cannot convert to u8")
+        }
+        StringTooBigErr {
+            description("encoder: string len bigger than 4294967295 bytes")
+        }
     }
 }

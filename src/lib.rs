@@ -1,3 +1,5 @@
+#![feature(try_from)]
+
 extern crate bytes;
 
 #[macro_use]
