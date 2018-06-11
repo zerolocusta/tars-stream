@@ -328,7 +328,7 @@ impl DecodeFrom for String {
 impl DecodeFrom for Bytes {
     fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
         // clone will not copy [u8]
-        Ok(Bytes::from(&b[0..b.len() - 1]))
+        Ok(Bytes::from(&b[..]))
         // b.clone()
     }
 }
@@ -547,6 +547,11 @@ mod tests {
         let list: Vec<u8> = de.read(TarsTypeMark::EnSimplelist.value()).unwrap();
         let result: Vec<u8> = vec![4, 5, 6, 7];
         assert_eq!(list, result);
+
+        let b2: [u8; 6] = [0x0d, 0x00, 0x00, 0x00, 0x00, 0x00];
+        let mut de2 = TarsDecoder::new(&b2);
+        let v: Vec<u8> = de2.get_require(0).unwrap();
+        assert_eq!(v, vec![]);
     }
 
     #[test]
@@ -613,6 +618,11 @@ mod tests {
             de.read::<Vec<String>>(TarsTypeMark::EnList.value()),
             Err(DecodeErr::NoEnoughDataErr)
         );
+
+        let b2: [u8; 5] = [0x99, 0, 0, 0, 0];
+        let mut de2 = TarsDecoder::new(&b2[..]);
+        let v2: Vec<BTreeMap<String, i32>> = de2.get_require(9).unwrap();
+        assert_eq!(v2, vec![]);
     }
 
     #[test]
@@ -648,12 +658,15 @@ mod tests {
             b'l',
             b'd',
         ];
-        let mut de2 = TarsDecoder::new(&b[..]);
-        let map = de2
-            .read::<BTreeMap<String, String>>(TarsTypeMark::EnMaps.value())
-            .unwrap();
+        let mut de = TarsDecoder::new(&b[..]);
+        let map: BTreeMap<String, String> = de.read(TarsTypeMark::EnMaps.value()).unwrap();
         let value2 = map.get(&String::from(&"foo bar"[..])).unwrap();
         assert_eq!(value2, &String::from(&"hello world"[..]));
+
+        let b2: [u8; 5] = [0x48, 0, 0, 0, 0];
+        let mut de2 = TarsDecoder::new(&b2[..]);
+        let map2: BTreeMap<Vec<String>, BTreeMap<i32, String>> = de2.get_require(4).unwrap();
+        assert_eq!(map2, BTreeMap::new());
     }
 
     #[test]

@@ -5,7 +5,6 @@ use std::convert::TryFrom;
 use std::mem;
 use tars_type::TarsTypeMark;
 use tars_type::TarsTypeMark::*;
-
 const MAX_HEADER_LEN: usize = 2;
 const MAX_SIZE_LEN: usize = 4;
 
@@ -40,6 +39,11 @@ pub fn write_struct<T: EncodeTo>(tag: u8, buf: &mut BytesMut, s: &T) -> Result<(
 
 pub trait EncodeTo {
     fn encode_into_bytes(&self, tag: u8, buf: &mut BytesMut) -> Result<(), EncodeErr>;
+
+    #[allow(unused_variables)]
+    fn encode_raw_bytes(&self, buf: &mut BytesMut) {
+        unimplemented!() // only implement by i8 u8 bool
+    }
 }
 
 impl EncodeTo for i8 {
@@ -54,6 +58,10 @@ impl EncodeTo for i8 {
         }
         Ok(())
     }
+
+    fn encode_raw_bytes(&self, buf: &mut BytesMut) {
+        buf.put_i8(*self)
+    }
 }
 
 impl EncodeTo for u8 {
@@ -67,6 +75,10 @@ impl EncodeTo for u8 {
             buf.put_u8(*self);
         }
         Ok(())
+    }
+
+    fn encode_raw_bytes(&self, buf: &mut BytesMut) {
+        buf.put_u8(*self)
     }
 }
 
@@ -171,6 +183,11 @@ impl EncodeTo for bool {
         let value: u8 = if *self { 1 } else { 0 };
         value.encode_into_bytes(tag, buf)
     }
+
+    fn encode_raw_bytes(&self, buf: &mut BytesMut) {
+        let value: u8 = if *self { 1 } else { 0 };
+        value.encode_raw_bytes(buf);
+    }
 }
 
 impl EncodeTo for String {
@@ -212,8 +229,45 @@ impl<K: EncodeTo + Ord, V: EncodeTo> EncodeTo for BTreeMap<K, V> {
             check_maybe_resize(buf, inner_bytes.len() + MAX_HEADER_LEN + MAX_SIZE_LEN);
             put_head(buf, tag, EnMaps)?;
             buf.put_u32_be(inner_bytes.len() as u32);
-            buf.unsplit(inner_bytes);
+            if inner_bytes.len() > 0 {
+                buf.unsplit(inner_bytes);
+            }
             Ok(())
+        }
+    }
+}
+
+impl<T: EncodeTo> EncodeTo for Vec<T> {
+    fn encode_into_bytes(&self, tag: u8, buf: &mut BytesMut) -> Result<(), EncodeErr> {
+        if mem::size_of::<T>() == mem::size_of::<u8>() {
+            if self.len() > u32::max_value() as usize {
+                Err(EncodeErr::BufferTooBigErr)
+            } else {
+                buf.reserve(2 * MAX_HEADER_LEN + MAX_SIZE_LEN + self.len());
+                put_head(buf, tag, EnSimplelist)?;
+                put_head(buf, 0, EnInt8)?;
+                buf.put_u32_be(self.len() as u32);
+                for ele in self.into_iter() {
+                    ele.encode_raw_bytes(buf);
+                }
+                Ok(())
+            }
+        } else {
+            let mut inner_bytes = BytesMut::new();
+            for ele in self.into_iter() {
+                ele.encode_into_bytes(0, &mut inner_bytes)?;
+            }
+            if inner_bytes.len() > u32::max_value() as usize {
+                Err(EncodeErr::BufferTooBigErr)
+            } else {
+                check_maybe_resize(buf, inner_bytes.len() + MAX_HEADER_LEN + MAX_SIZE_LEN);
+                put_head(buf, tag, EnList)?;
+                buf.put_u32_be(inner_bytes.len() as u32);
+                if inner_bytes.len() > 0 {
+                    buf.unsplit(inner_bytes);
+                }
+                Ok(())
+            }
         }
     }
 }
@@ -469,6 +523,152 @@ mod tests {
         assert_eq!(
             &buf,
             &b"\x08\0\0\0\x12\x06\x05hello\x00\x20\x06\x05world\x00\x2a"[..]
+        );
+    }
+
+    #[test]
+    fn test_encode_vec() {
+        let mut v1: Vec<u8> = Vec::with_capacity(0xf7f7f);
+        for _ in 0..0xf7f7f {
+            v1.push(255);
+        }
+        let mut buf = BytesMut::new();
+        v1.encode_into_bytes(0, &mut buf).unwrap();
+        let mut header_v = Vec::from(&b"\x0d\x00\x00\x0f\x7f\x7f"[..]);
+        header_v.extend_from_slice(&v1);
+        assert_eq!(&buf, &header_v);
+
+        let mut v2: Vec<i8> = Vec::with_capacity(0xf7f7f);
+        for _ in 0..0xf7f7f {
+            v2.push(-127);
+        }
+        let mut buf = BytesMut::new();
+        v2.encode_into_bytes(0, &mut buf).unwrap();
+        let mut header_v: Vec<u8> = Vec::from(&b"\x0d\x00\x00\x0f\x7f\x7f"[..]);
+        header_v.extend_from_slice(unsafe { mem::transmute(&v2[..]) });
+        assert_eq!(&buf, &header_v);
+
+        let mut v3: Vec<bool> = Vec::with_capacity(0xf6f7f);
+        let mut b = false;
+        for _ in 0..0xf6f7f {
+            v3.push(b);
+            b = !b;
+        }
+        let mut buf = BytesMut::new();
+        v3.encode_into_bytes(0, &mut buf).unwrap();
+        let mut header_v: Vec<u8> = Vec::from(&b"\x0d\x00\x00\x0f\x6f\x7f"[..]);
+        header_v.extend_from_slice(unsafe { mem::transmute(&v3[..]) });
+        assert_eq!(&buf, &header_v);
+
+        let mut v4: Vec<String> = Vec::with_capacity(0xf6f7e);
+        let str4 = "hello".repeat(128);
+        let str1 = "hello".to_string();
+        let times = 0xf6f7e / 2;
+        for _ in 0..times {
+            v4.push(str4.clone());
+        }
+        for _ in 0..times {
+            v4.push(str1.clone());
+        }
+
+        let mut buf = BytesMut::new();
+        v4.encode_into_bytes(10, &mut buf).unwrap();
+
+        assert_eq!(&buf[0..1], &b"\xa9"[..]);
+        let len_in_u8: [u8; 4] = [buf[1], buf[2], buf[3], buf[4]];
+        let len: u32 = u32::from_be(unsafe { mem::transmute(len_in_u8) });
+        // (header len + string size + string in bytes)
+        let expect_len = (1 + 4 + str4.len()) * times + (1 + 1 + str1.len()) * times;
+        assert_eq!(len, expect_len as u32);
+    }
+
+    #[test]
+    fn test_encode_struct() {
+        #[derive(Clone, Debug)]
+        struct TestStruct {
+            a: i8,             // tag 0
+            b: u16,            // tag 1
+            v1: Vec<u8>,       // tag 2
+            c: Option<String>, // tag 3 option
+        }
+
+        impl TestStruct {
+            pub fn new() -> Self {
+                TestStruct {
+                    a: 0,
+                    b: 0,
+                    v1: vec![],
+                    c: None,
+                }
+            }
+        }
+
+        impl EncodeTo for TestStruct {
+            fn encode_into_bytes(&self, _tag: u8, buf: &mut BytesMut) -> Result<(), EncodeErr> {
+                self.a.encode_into_bytes(0, buf)?;
+                self.b.encode_into_bytes(1, buf)?;
+                self.v1.encode_into_bytes(2, buf)?;
+                self.c.encode_into_bytes(3, buf)?;
+                Ok(())
+            }
+        }
+
+        let mut s = TestStruct::new();
+
+        let mut buf = BytesMut::new();
+        s.encode_into_bytes(0, &mut buf).unwrap();
+        assert_eq!(&buf, &b"\x0c\x1c\x2d\x00\x00\x00\x00\x00"[..]);
+
+        let mut buf = BytesMut::new();
+        s.a = -1;
+        s.b = 65535;
+        s.v1.push(255);
+        s.v1.push(0);
+        s.c = Some("hello".to_string());
+        s.encode_into_bytes(0, &mut buf).unwrap();
+        assert_eq!(
+            &buf,
+            &b"\x00\xff\x11\xff\xff\x2d\x00\x00\x00\x00\x02\xff\x00\x36\x05hello"[..]
+        );
+
+        #[derive(Clone, Debug)]
+        struct TestStruct2 {
+            f: f32,                      // 0
+            s: TestStruct,               // 1
+            m: BTreeMap<String, String>, // 2
+            s2: TestStruct,              // 3
+            y: Option<u8>,               // 4 option
+        }
+
+        impl TestStruct2 {
+            pub fn new() -> Self {
+                TestStruct2 {
+                    f: 0.0,
+                    s: TestStruct::new(),
+                    m: BTreeMap::new(),
+                    s2: TestStruct::new(),
+                    y: None,
+                }
+            }
+        }
+
+        impl EncodeTo for TestStruct2 {
+            fn encode_into_bytes(&self, _tag: u8, buf: &mut BytesMut) -> Result<(), EncodeErr> {
+                self.f.encode_into_bytes(0, buf)?;
+                write_struct(1, buf, &self.s)?;
+                self.m.encode_into_bytes(2, buf)?;
+                write_struct(3, buf, &self.s2)?;
+                self.y.encode_into_bytes(4, buf)?;
+                Ok(())
+            }
+        }
+
+        let t2 = TestStruct2::new();
+        let mut buf = BytesMut::new();
+        t2.encode_into_bytes(0, &mut buf).unwrap();
+        assert_eq!(
+            &buf,
+            &b"\x04\x00\x00\x00\x00\x1a\x0c\x1c\x2d\x00\x00\x00\x00\x00\x0b\x28\x00\x00\x00\x00\x3a\x0c\x1c\x2d\x00\x00\x00\x00\x00\x0b"[..]
         );
     }
 }
