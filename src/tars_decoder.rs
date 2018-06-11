@@ -63,6 +63,7 @@ impl TarsDecoder {
                 self.pos += taked_size;
             }
         }
+        println!("---------");
         match result {
             Some(h) => Ok(h),
             None => Err(DecodeErr::NoEnoughDataErr),
@@ -76,15 +77,10 @@ impl TarsDecoder {
                 Ok(R::decode_from_bytes(&b)?)
             }
             _ if tars_type == TarsTypeMark::EnSimplelist.value() => {
-                let head = self.take_head()?; // consume header (list type)
-                if head.tars_type != TarsTypeMark::EnInt8.value() {
-                    Err(DecodeErr::WrongSimpleListTarsTypeErr)
-                } else {
-                    let size = self.take_size(tars_type)?;
-                    let value = self.take_then_advance(size)?;
-                    // let _ = self.take_then_advance(1)?;
-                    Ok(R::simple_list_from_bytes(&value)?)
-                }
+                let size = self.take_simple_list_size()?;
+                let value = self.take_then_advance(size)?;
+                // let _ = self.take_then_advance(1)?;
+                Ok(R::simple_list_from_bytes(&value)?)
             }
             _ => {
                 let size = self.take_size(tars_type)?;
@@ -107,6 +103,7 @@ impl TarsDecoder {
                 tag = self.read::<u8>(TarsTypeMark::EnInt8.value())?;
                 2
             };
+            println!("tag: {:?} | tars_type: {:?}", tag, tars_type);
             Ok(Head {
                 tag,
                 len,
@@ -168,7 +165,12 @@ impl TarsDecoder {
     }
 
     fn take_simple_list_size(&mut self) -> Result<usize, DecodeErr> {
-        Ok(self.read::<u32>(TarsTypeMark::EnInt32.value())? as usize)
+        let head = self.take_head()?; // consume header (list type)
+        if head.tars_type == TarsTypeMark::EnInt8.value() {
+            Ok(self.read::<u32>(TarsTypeMark::EnInt32.value())? as usize)
+        } else {
+            Err(DecodeErr::WrongSimpleListTarsTypeErr)
+        }
     }
 
     fn take_struct_size(&mut self) -> Result<usize, DecodeErr> {

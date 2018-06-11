@@ -8,6 +8,13 @@ use tars_type::TarsTypeMark::*;
 const MAX_HEADER_LEN: usize = 2;
 const MAX_SIZE_LEN: usize = 4;
 
+fn check_maybe_resize(buf: &mut BytesMut, len: usize) {
+    if buf.remaining_mut() < len {
+        let new_len = buf.remaining_mut() + len + 1;
+        buf.reserve(new_len)
+    }
+}
+
 fn put_head(buf: &mut BytesMut, tag: u8, tars_type: TarsTypeMark) -> Result<(), EncodeErr> {
     if tag > u8::max_value() {
         Err(EncodeErr::TooBigTagErr)
@@ -20,13 +27,6 @@ fn put_head(buf: &mut BytesMut, tag: u8, tars_type: TarsTypeMark) -> Result<(), 
             buf.put_u16_be(head)
         }
         Ok(())
-    }
-}
-
-fn check_maybe_resize(buf: &mut BytesMut, len: usize) {
-    if buf.remaining_mut() < len {
-        let new_len = buf.remaining_mut() + len + 1;
-        buf.reserve(new_len)
     }
 }
 
