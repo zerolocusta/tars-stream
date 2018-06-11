@@ -25,7 +25,10 @@ impl TarsDecoder {
         TarsDecoder { buf: b, pos: 0 }
     }
     // TODO: may not reset pos
-    pub fn get_require<R: DecodeFrom>(&mut self, tag: u8) -> Result<R, DecodeErr> {
+    pub fn get_require<R>(&mut self, tag: u8) -> Result<R, DecodeErr>
+    where
+        R: DecodeFrom,
+    {
         self.pos = 0;
         if let Ok(head) = self.skip_to_tag(tag) {
             Ok(self.read::<R>(head.tars_type)?)
@@ -34,7 +37,10 @@ impl TarsDecoder {
         }
     }
 
-    pub fn get_optional<R: DecodeFrom>(&mut self, tag: u8) -> Result<Option<R>, DecodeErr> {
+    pub fn get_optional<R>(&mut self, tag: u8) -> Result<Option<R>, DecodeErr>
+    where
+        R: DecodeFrom,
+    {
         self.pos = 0;
         if let Ok(head) = self.skip_to_tag(tag) {
             Ok(Some(self.read::<R>(head.tars_type)?))
@@ -70,17 +76,14 @@ impl TarsDecoder {
         }
     }
 
-    pub fn read<R: DecodeFrom>(&mut self, tars_type: u8) -> Result<R, DecodeErr> {
+    pub fn read<R>(&mut self, tars_type: u8) -> Result<R, DecodeErr>
+    where
+        R: DecodeFrom,
+    {
         match tars_type {
             _ if tars_type == TarsTypeMark::EnZero.value() => {
                 let b = Bytes::from(&b"\x00"[..]);
                 Ok(R::decode_from_bytes(&b)?)
-            }
-            _ if tars_type == TarsTypeMark::EnSimplelist.value() => {
-                let size = self.take_simple_list_size()?;
-                let value = self.take_then_advance(size)?;
-                // let _ = self.take_then_advance(1)?;
-                Ok(R::simple_list_from_bytes(&value)?)
             }
             _ => {
                 let size = self.take_size(tars_type)?;
@@ -197,12 +200,6 @@ pub trait DecodeFrom {
     fn decode_from_bytes(&Bytes) -> Result<Self, DecodeErr>
     where
         Self: Sized;
-    fn simple_list_from_bytes(&Bytes) -> Result<Self, DecodeErr>
-    where
-        Self: Sized,
-    {
-        unimplemented!()
-    }
 }
 
 impl DecodeFrom for i8 {
@@ -335,7 +332,11 @@ impl DecodeFrom for Bytes {
     }
 }
 
-impl<K: DecodeFrom + Ord, V: DecodeFrom> DecodeFrom for BTreeMap<K, V> {
+impl<K, V> DecodeFrom for BTreeMap<K, V>
+where
+    K: DecodeFrom + Ord,
+    V: DecodeFrom,
+{
     fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
         let mut map = BTreeMap::new();
         let mut decoder = TarsDecoder::new(&b);
@@ -350,8 +351,11 @@ impl<K: DecodeFrom + Ord, V: DecodeFrom> DecodeFrom for BTreeMap<K, V> {
     }
 }
 
-impl<T: DecodeFrom> DecodeFrom for Vec<T> {
-    fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
+impl<T> DecodeFrom for Vec<T>
+where
+    T: DecodeFrom,
+{
+    default fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
         let mut v = vec![];
         let mut decoder = TarsDecoder::new(&b);
         while decoder.has_remaining() {
@@ -361,23 +365,43 @@ impl<T: DecodeFrom> DecodeFrom for Vec<T> {
         }
         Ok(v)
     }
+}
 
-    fn simple_list_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
-        let mut v: Vec<T> = vec![];
+impl DecodeFrom for Vec<u8> {
+    fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
+        let mut v: Vec<u8> = vec![];
         let mut decoder = TarsDecoder::new(&b);
         while decoder.has_remaining() {
-            let ele = decoder.read::<T>(TarsTypeMark::EnInt8.value())?;
+            let ele = decoder.read::<u8>(TarsTypeMark::EnInt8.value())?;
             v.push(ele)
         }
         Ok(v)
     }
 }
 
-// impl<T: DecodeFrom> DecodeFrom for Option<T> {
-//     fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
-//         Ok(Some(T::decode_from_bytes(b)?))
-//     }
-// }
+impl DecodeFrom for Vec<i8> {
+    fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
+        let mut v: Vec<i8> = vec![];
+        let mut decoder = TarsDecoder::new(&b);
+        while decoder.has_remaining() {
+            let ele = decoder.read::<i8>(TarsTypeMark::EnInt8.value())?;
+            v.push(ele)
+        }
+        Ok(v)
+    }
+}
+
+impl DecodeFrom for Vec<bool> {
+    fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
+        let mut v: Vec<bool> = vec![];
+        let mut decoder = TarsDecoder::new(&b);
+        while decoder.has_remaining() {
+            let ele = decoder.read::<bool>(TarsTypeMark::EnInt8.value())?;
+            v.push(ele)
+        }
+        Ok(v)
+    }
+}
 
 #[cfg(test)]
 mod tests {

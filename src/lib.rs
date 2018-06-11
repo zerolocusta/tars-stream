@@ -1,5 +1,7 @@
 #![feature(try_from)]
-
+#![feature(core_intrinsics)]
+#![feature(extern_prelude)]
+#![feature(specialization)]
 extern crate bytes;
 
 #[macro_use]

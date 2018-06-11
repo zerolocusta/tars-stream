@@ -1,3 +1,12 @@
+use std::any::{Any, TypeId};
+
+const LIST_PREFIX: &str = "std::vec::Vec";
+const MAP_PREFIX: &str = "std::collections::BTreeMap";
+
+const SIMPLE_LIST_I8: &str = "std::vec::Vec<i8>";
+const SIMPLE_LIST_U8: &str = "std::vec::Vec<u8>";
+const SIMPLE_LIST_BOOL: &str = "std::vec::Vec<bool>";
+
 pub enum TarsTypeMark {
     EnInt8 = 0,
     EnInt16 = 1,
@@ -21,131 +30,65 @@ impl TarsTypeMark {
     }
 }
 
-// pub type TarsStruct = BTreeMap<u8, TarsType>;
+pub fn is_u8<T: ?Sized + Any>() -> bool {
+    TypeId::of::<T>() == TypeId::of::<u8>()
+}
 
-// pub type TarsMap = BTreeMap<TarsType, TarsType>;
+pub fn is_i8<T: ?Sized + Any>() -> bool {
+    TypeId::of::<T>() == TypeId::of::<i8>()
+}
 
-// pub type TarsList = Vec<TarsType>;
+pub fn is_u16<T: ?Sized + Any>() -> bool {
+    TypeId::of::<T>() == TypeId::of::<u16>()
+}
 
-// #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-// pub enum TarsType {
-//     EnInt8(i8),   // = 0
-//     EnInt16(i16), // = 1
-//     EnInt32(i32), // = 2
-//     EnInt64(i64), // = 3
-//     // need translate from bits f32::from_bits
-//     EnFloat(u32), // = 4
-//     // need translate from bits f64::from_bits
-//     EnDouble(u64),    // = 5
-//     EnString(String), // = 6 || 7
-//     EnMaps(TarsMap),  // = 8
-//     EnList(TarsList), // = 9
-//     EnStruct(Bytes),  // = 10 || 11
-//                       // EnZero,                       // = 12
-//                       // EnSimplelist, // = 13
-// }
+pub fn is_i16<T: ?Sized + Any>() -> bool {
+    TypeId::of::<T>() == TypeId::of::<i16>()
+}
 
-// impl TarsType {
-//     pub fn unwrap_i8(self) -> Result<i8, TarsTypeErr> {
-//         match self {
-//             TarsType::EnInt8(i) => Ok(i),
-//             _ => Err(TarsTypeErr::DisMatchTarsTypeErr),
-//         }
-//     }
+pub fn is_u32<T: ?Sized + Any>() -> bool {
+    TypeId::of::<T>() == TypeId::of::<u32>()
+}
 
-//     pub fn unwrap_u8(self) -> Result<u8, TarsTypeErr> {
-//         match self {
-//             TarsType::EnInt8(i) => Ok(i as u8),
-//             _ => Err(TarsTypeErr::DisMatchTarsTypeErr),
-//         }
-//     }
+pub fn is_i32<T: ?Sized + Any>() -> bool {
+    TypeId::of::<T>() == TypeId::of::<i32>()
+}
 
-//     pub fn unwrap_i16(self) -> Result<i16, TarsTypeErr> {
-//         match self {
-//             TarsType::EnInt8(i) => Ok(i as i16),
-//             TarsType::EnInt16(i) => Ok(i),
-//             _ => Err(TarsTypeErr::DisMatchTarsTypeErr),
-//         }
-//     }
+pub fn is_u64<T: ?Sized + Any>() -> bool {
+    TypeId::of::<T>() == TypeId::of::<u64>()
+}
 
-//     pub fn unwrap_u16(self) -> Result<u16, TarsTypeErr> {
-//         match self {
-//             TarsType::EnInt8(i) => Ok(i as u16),
-//             TarsType::EnInt16(i) => Ok(i as u16),
-//             _ => Err(TarsTypeErr::DisMatchTarsTypeErr),
-//         }
-//     }
+pub fn is_i64<T: ?Sized + Any>() -> bool {
+    TypeId::of::<T>() == TypeId::of::<i64>()
+}
 
-//     pub fn unwrap_i32(self) -> Result<i32, TarsTypeErr> {
-//         match self {
-//             TarsType::EnInt8(i) => Ok(i as i32),
-//             TarsType::EnInt16(i) => Ok(i as i32),
-//             TarsType::EnInt32(i) => Ok(i),
-//             _ => Err(TarsTypeErr::DisMatchTarsTypeErr),
-//         }
-//     }
+pub fn is_f32<T: ?Sized + Any>() -> bool {
+    TypeId::of::<T>() == TypeId::of::<f32>()
+}
 
-//     pub fn unwrap_u32(self) -> Result<u32, TarsTypeErr> {
-//         match self {
-//             TarsType::EnInt8(i) => Ok(i as u32),
-//             TarsType::EnInt16(i) => Ok(i as u32),
-//             TarsType::EnInt32(i) => Ok(i as u32),
-//             _ => Err(TarsTypeErr::DisMatchTarsTypeErr),
-//         }
-//     }
+pub fn is_f64<T: ?Sized + Any>() -> bool {
+    TypeId::of::<T>() == TypeId::of::<f64>()
+}
 
-//     pub fn unwrap_i64(self) -> Result<i64, TarsTypeErr> {
-//         match self {
-//             TarsType::EnInt8(i) => Ok(i as i64),
-//             TarsType::EnInt16(i) => Ok(i as i64),
-//             TarsType::EnInt32(i) => Ok(i as i64),
-//             TarsType::EnInt64(i) => Ok(i),
-//             _ => Err(TarsTypeErr::DisMatchTarsTypeErr),
-//         }
-//     }
+pub fn is_bool<T: ?Sized + Any>() -> bool {
+    TypeId::of::<T>() == TypeId::of::<bool>()
+}
 
-//     pub fn unwrap_u64(self) -> Result<u64, TarsTypeErr> {
-//         match self {
-//             TarsType::EnInt8(i) => Ok(i as u64),
-//             TarsType::EnInt16(i) => Ok(i as u64),
-//             TarsType::EnInt32(i) => Ok(i as u64),
-//             TarsType::EnInt64(i) => Ok(i as u64),
-//             _ => Err(TarsTypeErr::DisMatchTarsTypeErr),
-//         }
-//     }
+pub fn is_list<T: ?Sized + Any>() -> bool {
+    let name = unsafe{ std::intrinsics::type_name::<T>() };
+    name.starts_with(LIST_PREFIX)
+}
 
-//     pub fn unwrap_float(self) -> Result<f32, TarsTypeErr> {
-//         match self {
-//             TarsType::EnFloat(f) => Ok(f32::from_bits(f)),
-//             _ => Err(TarsTypeErr::DisMatchTarsTypeErr),
-//         }
-//     }
+pub fn is_simple_list<T: ?Sized + Any>() -> bool {
+    let name = unsafe{ std::intrinsics::type_name::<T>() };
+    name == SIMPLE_LIST_I8 || name == SIMPLE_LIST_U8 || name == SIMPLE_LIST_BOOL
+}
 
-//     pub fn unwrap_double(self) -> Result<f64, TarsTypeErr> {
-//         match self {
-//             TarsType::EnDouble(f) => Ok(f64::from_bits(f)),
-//             _ => Err(TarsTypeErr::DisMatchTarsTypeErr),
-//         }
-//     }
+pub fn is_simple_list_element<T: ?Sized + Any>() -> bool {
+    is_bool::<T>() || is_u8::<T>() || is_i8::<T>()
+}
 
-//     pub fn unwrap_map(self) -> Result<TarsMap, TarsTypeErr> {
-//         match self {
-//             TarsType::EnMaps(s) => Ok(s),
-//             _ => Err(TarsTypeErr::DisMatchTarsTypeErr),
-//         }
-//     }
-
-//     pub fn unwrap_list(self) -> Result<TarsList, TarsTypeErr> {
-//         match self {
-//             TarsType::EnList(s) => Ok(s),
-//             _ => Err(TarsTypeErr::DisMatchTarsTypeErr),
-//         }
-//     }
-
-//     pub fn unwrap_struct(self) -> Result<Bytes, TarsTypeErr> {
-//         match self {
-//             TarsType::EnStruct(s) => Ok(s),
-//             _ => Err(TarsTypeErr::DisMatchTarsTypeErr),
-//         }
-//     }
-// }
+pub fn is_map<T: ?Sized + Any>() -> bool {
+    let name = unsafe{ std::intrinsics::type_name::<T>() };
+    name.starts_with(MAP_PREFIX)
+}

@@ -76,46 +76,58 @@ fn test_encode_decode_struct() {
 
 
 
-#[derive(Clone, Debug)]
-struct TestStruct2 {
-    f: f32,                      // 0
-    s: TestStruct,               // 1
-    m: BTreeMap<String, String>, // 2
-    s2: TestStruct,              // 3
-    y: Option<u8>,               // 4 option
-}
+// #[derive(Clone, Debug)]
+// struct TestStruct2 {
+//     f1: f32,                     // 0
+//     f2: f64,                     // 1
 
-impl TestStruct2 {
-    pub fn new() -> Self {
-        TestStruct2 {
-            f: 0.0,
-            s: TestStruct::new(),
-            m: BTreeMap::new(),
-            s2: TestStruct::new(),
-            y: None,
-        }
-    }
-}
+//     i1: i8,
+//     i2: i16,
+//     i3: i32,
+//     i4: i64,
 
-impl DecodeFrom for TestStruct2 {
-    fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
-        let mut de = TarsDecoder::new(&b);
-        let s = TestStruct::decode_from_bytes(&de.get_require(1)?)?;
-        let s2 = TestStruct::decode_from_bytes(&de.get_require(3)?)?;
-        let m = de.get_require(2)?;
-        let f = de.get_require(0)?;
-        let y = de.get_optional(4)?;
-        Ok(TestStruct2 { f, s, m, s2, y })
-    }
-}
+//     u1: u8,
+//     u2: u16,
+//     u3: u32,
+//     u4: u64,
 
-impl EncodeTo for TestStruct2 {
-    fn encode_into_bytes(&self, _tag: u8, buf: &mut BytesMut) -> Result<(), EncodeErr> {
-        self.f.encode_into_bytes(0, buf)?;
-        write_struct(1, buf, &self.s)?;
-        self.m.encode_into_bytes(2, buf)?;
-        write_struct(3, buf, &self.s2)?;
-        self.y.encode_into_bytes(4, buf)?;
-        Ok(())
-    }
-}
+//     s: TestStruct,               // 2
+//     v: Vec<TestStruct>,
+//     m: BTreeMap<String, String>, // 3
+//     y: Option<u8>,               // 5 option
+// }
+
+// impl TestStruct2 {
+//     pub fn new() -> Self {
+//         TestStruct2 {
+//             f1: 0.0,
+//             s: TestStruct::new(),
+//             m: BTreeMap::new(),
+//             s2: TestStruct::new(),
+//             y: None,
+//         }
+//     }
+// }
+
+// impl DecodeFrom for TestStruct2 {
+//     fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
+//         let mut de = TarsDecoder::new(&b);
+//         let s = TestStruct::decode_from_bytes(&de.get_require(1)?)?;
+//         let s2 = TestStruct::decode_from_bytes(&de.get_require(3)?)?;
+//         let m = de.get_require(2)?;
+//         let f1 = de.get_require(0)?;
+//         let y = de.get_optional(4)?;
+//         Ok(TestStruct2 { f1, s, m, s2, y })
+//     }
+// }
+
+// impl EncodeTo for TestStruct2 {
+//     fn encode_into_bytes(&self, _tag: u8, buf: &mut BytesMut) -> Result<(), EncodeErr> {
+//         self.f1.encode_into_bytes(0, buf)?;
+//         write_struct(1, buf, &self.s)?;
+//         self.m.encode_into_bytes(2, buf)?;
+//         write_struct(3, buf, &self.s2)?;
+//         self.y.encode_into_bytes(4, buf)?;
+//         Ok(())
+//     }
+// }

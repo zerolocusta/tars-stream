@@ -1,12 +1,31 @@
-use bytes::{BufMut, BytesMut};
+use bytes::{BufMut, Bytes, BytesMut};
 use errors::EncodeErr;
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::mem;
-use tars_type::TarsTypeMark;
+use tars_type::is_simple_list_element;
 use tars_type::TarsTypeMark::*;
+use tars_type::*;
 const MAX_HEADER_LEN: usize = 2;
 const MAX_SIZE_LEN: usize = 4;
+
+#[derive(Debug, Clone)]
+pub struct TarsEncoder {
+    buf: BytesMut,
+    need_remove_struct_tag: bool,
+}
+
+impl TarsEncoder {
+    pub fn new() -> Self {
+        TarsEncoder {
+            buf: BytesMut::new(),
+            need_remove_struct_tag: false,
+        }
+    }
+    pub fn to_bytes(self) -> Bytes {
+        self.buf.freeze()
+    }
+}
 
 fn check_maybe_resize(buf: &mut BytesMut, len: usize) {
     if buf.remaining_mut() < len {
@@ -237,37 +256,76 @@ impl<K: EncodeTo + Ord, V: EncodeTo> EncodeTo for BTreeMap<K, V> {
     }
 }
 
-impl<T: EncodeTo> EncodeTo for Vec<T> {
-    fn encode_into_bytes(&self, tag: u8, buf: &mut BytesMut) -> Result<(), EncodeErr> {
-        if mem::size_of::<T>() == mem::size_of::<u8>() {
-            if self.len() > u32::max_value() as usize {
-                Err(EncodeErr::BufferTooBigErr)
-            } else {
-                buf.reserve(2 * MAX_HEADER_LEN + MAX_SIZE_LEN + self.len());
-                put_head(buf, tag, EnSimplelist)?;
-                put_head(buf, 0, EnInt8)?;
-                buf.put_u32_be(self.len() as u32);
-                for ele in self.into_iter() {
-                    ele.encode_raw_bytes(buf);
-                }
-                Ok(())
-            }
+impl<T> EncodeTo for Vec<T>
+where
+    T: 'static + EncodeTo,
+{
+    default fn encode_into_bytes(&self, tag: u8, buf: &mut BytesMut) -> Result<(), EncodeErr> {
+        let mut inner_bytes = BytesMut::new();
+        for ele in self.into_iter() {
+            ele.encode_into_bytes(0, &mut inner_bytes)?;
+        }
+        if inner_bytes.len() > u32::max_value() as usize {
+            Err(EncodeErr::BufferTooBigErr)
         } else {
-            let mut inner_bytes = BytesMut::new();
+            check_maybe_resize(buf, inner_bytes.len() + MAX_HEADER_LEN + MAX_SIZE_LEN);
+            put_head(buf, tag, EnList)?;
+            buf.put_u32_be(inner_bytes.len() as u32);
+            if inner_bytes.len() > 0 {
+                buf.unsplit(inner_bytes);
+            }
+            Ok(())
+        }
+    }
+}
+
+impl EncodeTo for Vec<u8> {
+    fn encode_into_bytes(&self, tag: u8, buf: &mut BytesMut) -> Result<(), EncodeErr> {
+        if self.len() > u32::max_value() as usize {
+            Err(EncodeErr::BufferTooBigErr)
+        } else {
+            buf.reserve(2 * MAX_HEADER_LEN + MAX_SIZE_LEN + self.len());
+            put_head(buf, tag, EnSimplelist)?;
+            put_head(buf, 0, EnInt8)?;
+            buf.put_u32_be(self.len() as u32);
             for ele in self.into_iter() {
-                ele.encode_into_bytes(0, &mut inner_bytes)?;
+                ele.encode_raw_bytes(buf);
             }
-            if inner_bytes.len() > u32::max_value() as usize {
-                Err(EncodeErr::BufferTooBigErr)
-            } else {
-                check_maybe_resize(buf, inner_bytes.len() + MAX_HEADER_LEN + MAX_SIZE_LEN);
-                put_head(buf, tag, EnList)?;
-                buf.put_u32_be(inner_bytes.len() as u32);
-                if inner_bytes.len() > 0 {
-                    buf.unsplit(inner_bytes);
-                }
-                Ok(())
+            Ok(())
+        }
+    }
+}
+
+impl EncodeTo for Vec<i8> {
+    fn encode_into_bytes(&self, tag: u8, buf: &mut BytesMut) -> Result<(), EncodeErr> {
+        if self.len() > u32::max_value() as usize {
+            Err(EncodeErr::BufferTooBigErr)
+        } else {
+            buf.reserve(2 * MAX_HEADER_LEN + MAX_SIZE_LEN + self.len());
+            put_head(buf, tag, EnSimplelist)?;
+            put_head(buf, 0, EnInt8)?;
+            buf.put_u32_be(self.len() as u32);
+            for ele in self.into_iter() {
+                ele.encode_raw_bytes(buf);
             }
+            Ok(())
+        }
+    }
+}
+
+impl EncodeTo for Vec<bool> {
+    fn encode_into_bytes(&self, tag: u8, buf: &mut BytesMut) -> Result<(), EncodeErr> {
+        if self.len() > u32::max_value() as usize {
+            Err(EncodeErr::BufferTooBigErr)
+        } else {
+            buf.reserve(2 * MAX_HEADER_LEN + MAX_SIZE_LEN + self.len());
+            put_head(buf, tag, EnSimplelist)?;
+            put_head(buf, 0, EnInt8)?;
+            buf.put_u32_be(self.len() as u32);
+            for ele in self.into_iter() {
+                ele.encode_raw_bytes(buf);
+            }
+            Ok(())
         }
     }
 }
@@ -284,6 +342,13 @@ impl<T: EncodeTo> EncodeTo for Option<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    
+    // #[test]
+    // fn test_put() {
+    //     let i: u8 = 1;
+    //     let mut en = TarsEncoder::new();
+    //     en.put(0, &i);
+    // }
 
     #[test]
     fn test_put_head() {
