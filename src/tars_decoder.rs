@@ -55,7 +55,6 @@ impl TarsDecoder {
         let mut result: Option<Head> = None;
         while self.has_remaining() {
             let head = self.take_head()?;
-            println!("{:?}", head);
             if head.tag == tag {
                 result = Some(head);
                 break;
@@ -221,7 +220,6 @@ impl DecodeFrom for u8 {
 impl DecodeFrom for bool {
     fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
         let v = u8::decode_from_bytes(b)?;
-        println!("{}", v);
         Ok(v != 0)
     }
 }
@@ -390,9 +388,9 @@ mod tests {
 
     #[derive(Clone, Debug)]
     struct TestStruct {
-        a: i8,       // tag 0
-        b: u16,      // tag 1
-        v1: Vec<u8>, // tag 2
+        a: i8,             // tag 0
+        b: u16,            // tag 1
+        v1: Vec<u8>,       // tag 2
         c: Option<String>, // tag 3 option
     }
 
@@ -419,7 +417,6 @@ mod tests {
 
     impl DecodeFrom for TestStruct {
         fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
-            println!("{:?}", b);
             let mut de = TarsDecoder::new(&b);
             let a = de.get_require(0)?;
             let b = de.get_require(1)?;
@@ -530,7 +527,6 @@ mod tests {
         assert_approx_eq!(s2.f, 0.332134f32);
 
         assert_eq!(s2.y, Some(128));
-
     }
 
     #[test]

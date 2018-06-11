@@ -166,6 +166,13 @@ impl EncodeTo for f64 {
     }
 }
 
+impl EncodeTo for bool {
+    fn encode_into_bytes(&self, tag: u8, buf: &mut BytesMut) -> Result<(), EncodeErr> {
+        let value: u8 = if *self { 1 } else { 0 };
+        value.encode_into_bytes(tag, buf)
+    }
+}
+
 impl EncodeTo for String {
     fn encode_into_bytes(&self, tag: u8, buf: &mut BytesMut) -> Result<(), EncodeErr> {
         let len = self.len();
@@ -423,6 +430,14 @@ mod tests {
         let f1: f64 = 0.14723333;
         f1.encode_into_bytes(0, &mut buf).unwrap();
         assert_eq!(&buf, &b"\x05\x3f\xc2\xd8\x8a\xb0\x9d\x97\x2a"[..]);
+    }
+
+    #[test]
+    fn test_encode_bool() {
+        let mut buf = BytesMut::new();
+        false.encode_into_bytes(0, &mut buf).unwrap();
+        true.encode_into_bytes(1, &mut buf).unwrap();
+        assert_eq!(&buf, &b"\x0c\x10\x01"[..]);
     }
 
     #[test]
