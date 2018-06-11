@@ -1,12 +1,14 @@
 use bytes::{BufMut, BytesMut};
 use errors::EncodeErr;
-use std::mem;
+use std::collections::BTreeMap;
 use std::convert::TryFrom;
+use std::mem;
 use tars_type::TarsTypeMark;
 use tars_type::TarsTypeMark::*;
 
 const MAX_HEADER_LEN: usize = 2;
 const MAX_SIZE_LEN: usize = 4;
+
 fn put_head(buf: &mut BytesMut, tag: u8, tars_type: TarsTypeMark) -> Result<(), EncodeErr> {
     if tag > u8::max_value() {
         Err(EncodeErr::TooBigTagErr)
@@ -42,18 +44,28 @@ pub trait EncodeTo {
 
 impl EncodeTo for i8 {
     fn encode_into_bytes(&self, tag: u8, buf: &mut BytesMut) -> Result<(), EncodeErr> {
-        check_maybe_resize(buf, MAX_HEADER_LEN + mem::size_of::<i8>());
-        put_head(buf, tag, EnInt8)?;
-        buf.put_i8(*self);
+        if *self == 0 {
+            check_maybe_resize(buf, MAX_HEADER_LEN);
+            put_head(buf, tag, EnZero)?;
+        } else {
+            check_maybe_resize(buf, MAX_HEADER_LEN + mem::size_of::<i8>());
+            put_head(buf, tag, EnInt8)?;
+            buf.put_i8(*self);
+        }
         Ok(())
     }
 }
 
 impl EncodeTo for u8 {
     fn encode_into_bytes(&self, tag: u8, buf: &mut BytesMut) -> Result<(), EncodeErr> {
-        check_maybe_resize(buf, MAX_HEADER_LEN + mem::size_of::<u8>());
-        put_head(buf, tag, EnInt8)?;
-        buf.put_u8(*self);
+        if *self == 0 {
+            check_maybe_resize(buf, MAX_HEADER_LEN);
+            put_head(buf, tag, EnZero)?;
+        } else {
+            check_maybe_resize(buf, MAX_HEADER_LEN + mem::size_of::<u8>());
+            put_head(buf, tag, EnInt8)?;
+            buf.put_u8(*self);
+        }
         Ok(())
     }
 }
@@ -174,7 +186,27 @@ impl EncodeTo for String {
             buf.put(self);
             Ok(())
         } else {
-            Err(EncodeErr::StringTooBigErr)
+            Err(EncodeErr::BufferTooBigErr)
+        }
+    }
+}
+
+impl<K: EncodeTo + Ord, V: EncodeTo> EncodeTo for BTreeMap<K, V> {
+    fn encode_into_bytes(&self, tag: u8, buf: &mut BytesMut) -> Result<(), EncodeErr> {
+        let mut inner_bytes = BytesMut::new();
+        for (key, value) in self.iter() {
+            key.encode_into_bytes(0, &mut inner_bytes)?;
+            value.encode_into_bytes(0, &mut inner_bytes)?;
+        }
+
+        if inner_bytes.len() > u32::max_value() as usize {
+            Err(EncodeErr::BufferTooBigErr)
+        } else {
+            check_maybe_resize(buf, inner_bytes.len() + MAX_HEADER_LEN + MAX_SIZE_LEN);
+            put_head(buf, tag, EnMaps)?;
+            buf.put_u32_be(inner_bytes.len() as u32);
+            buf.unsplit(inner_bytes);
+            Ok(())
         }
     }
 }
@@ -182,10 +214,8 @@ impl EncodeTo for String {
 impl<T: EncodeTo> EncodeTo for Option<T> {
     fn encode_into_bytes(&self, tag: u8, buf: &mut BytesMut) -> Result<(), EncodeErr> {
         match self {
-            Some(ele) => {
-                ele.encode_into_bytes(tag, buf)
-            },
-            None => Ok(())
+            Some(ele) => ele.encode_into_bytes(tag, buf),
+            None => Ok(()),
         }
     }
 }
@@ -221,13 +251,21 @@ mod tests {
         i0.encode_into_bytes(0, &mut buf).unwrap();
         assert_eq!(&buf[..], &b"\x00\x81"[..]);
 
+        let mut buf = BytesMut::new();
         let i1: i8 = 127;
         i1.encode_into_bytes(14, &mut buf).unwrap();
-        assert_eq!(&buf[..], &b"\x00\x81\xe0\x7f"[..]);
+        assert_eq!(&buf[..], &b"\xe0\x7f"[..]);
 
+        let mut buf = BytesMut::new();
         let i2: i8 = -1;
         i2.encode_into_bytes(255, &mut buf).unwrap();
-        assert_eq!(&buf[..], &b"\x00\x81\xe0\x7f\xf0\xff\xff"[..]);
+        assert_eq!(&buf[..], &b"\xf0\xff\xff"[..]);
+
+        let mut buf = BytesMut::new();
+        let i3: i8 = 0;
+        i3.encode_into_bytes(3, &mut buf).unwrap();
+        print!("{:?}", buf);
+        assert_eq!(&buf[..], &b"\x3c"[..]);
     }
 
     #[test]
@@ -237,13 +275,15 @@ mod tests {
         u0.encode_into_bytes(0, &mut buf).unwrap();
         assert_eq!(&buf[..], &b"\x00\x7f"[..]);
 
+        let mut buf = BytesMut::new();
         let u1: u8 = 255;
         u1.encode_into_bytes(14, &mut buf).unwrap();
-        assert_eq!(&buf[..], &b"\x00\x7f\xe0\xff"[..]);
+        assert_eq!(&buf[..], &b"\xe0\xff"[..]);
 
+        let mut buf = BytesMut::new();
         let u2: u8 = 0;
         u2.encode_into_bytes(255, &mut buf).unwrap();
-        assert_eq!(&buf[..], &b"\x00\x7f\xe0\xff\xf0\xff\x00"[..]);
+        assert_eq!(&buf[..], &b"\xfc\xff"[..]);
     }
 
     #[test]
@@ -342,7 +382,6 @@ mod tests {
 
         let mut buf = BytesMut::new();
         let i3: i64 = -2147483649;
-        println!("{:x}", i3);
         i3.encode_into_bytes(0, &mut buf).unwrap();
         assert_eq!(&buf[..], &b"\x03\xff\xff\xff\xff\x7f\xff\xff\xff"[..]);
     }
@@ -375,14 +414,13 @@ mod tests {
         let mut buf = BytesMut::new();
         let f1: f32 = 0.1472;
         f1.encode_into_bytes(0, &mut buf).unwrap();
-        assert_eq!(&buf[..], &b"\x04\x3e\x16\xbb\x99"[..]);
+        assert_eq!(&buf, &b"\x04\x3e\x16\xbb\x99"[..]);
     }
 
     #[test]
     fn test_encode_f64() {
         let mut buf = BytesMut::new();
         let f1: f64 = 0.14723333;
-        println!("{:x}", f1.to_bits());
         f1.encode_into_bytes(0, &mut buf).unwrap();
         assert_eq!(&buf, &b"\x05\x3f\xc2\xd8\x8a\xb0\x9d\x97\x2a"[..]);
     }
@@ -403,5 +441,19 @@ mod tests {
         let expect_buf = "\x07\x00\x0f\x7f\x7f".to_string() + &s1;
         s1.encode_into_bytes(0, &mut buf).unwrap();
         assert_eq!(&buf, &expect_buf);
+    }
+
+    #[test]
+    fn test_encode_map() {
+        let mut map: BTreeMap<String, i32> = BTreeMap::new();
+        map.insert("hello".to_string(), 32);
+        map.insert("world".to_string(), 42);
+
+        let mut buf = BytesMut::new();
+        map.encode_into_bytes(0, &mut buf).unwrap();
+        assert_eq!(
+            &buf,
+            &b"\x08\0\0\0\x12\x06\x05hello\x00\x20\x06\x05world\x00\x2a"[..]
+        );
     }
 }

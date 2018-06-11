@@ -34,7 +34,7 @@ impl TarsDecoder {
         }
     }
 
-    pub fn get_option<R: DecodeFrom>(&mut self, tag: u8) -> Result<Option<R>, DecodeErr> {
+    pub fn get_optional<R: DecodeFrom>(&mut self, tag: u8) -> Result<Option<R>, DecodeErr> {
         self.pos = 0;
         if let Ok(head) = self.skip_to_tag(tag) {
             Ok(Some(self.read::<R>(head.tars_type)?))
@@ -73,7 +73,7 @@ impl TarsDecoder {
     pub fn read<R: DecodeFrom>(&mut self, tars_type: u8) -> Result<R, DecodeErr> {
         match tars_type {
             _ if tars_type == TarsTypeMark::EnZero.value() => {
-                let b = Bytes::from(&b"\0"[..]);
+                let b = Bytes::from(&b"\x00"[..]);
                 Ok(R::decode_from_bytes(&b)?)
             }
             _ if tars_type == TarsTypeMark::EnSimplelist.value() => {
@@ -132,7 +132,7 @@ impl TarsDecoder {
             _ if tars_type == TarsTypeMark::EnMaps.value() => Ok(self.take_map_size()?),
             _ if tars_type == TarsTypeMark::EnList.value() => Ok(self.take_list_size()?),
             _ if tars_type == TarsTypeMark::EnStructBegin.value() => Ok(self.take_struct_size()?),
-            _ if tars_type == TarsTypeMark::EnZero.value() => Ok(1),
+            _ if tars_type == TarsTypeMark::EnZero.value() => Ok(0),
             _ if tars_type == TarsTypeMark::EnSimplelist.value() => {
                 Ok(self.take_simple_list_size()?)
             }
@@ -221,6 +221,7 @@ impl DecodeFrom for u8 {
 impl DecodeFrom for bool {
     fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
         let v = u8::decode_from_bytes(b)?;
+        println!("{}", v);
         Ok(v != 0)
     }
 }
@@ -411,7 +412,7 @@ mod tests {
             let s2 = TestStruct::decode_from_bytes(&de.get_require(3)?)?;
             let m = de.get_require(2)?;
             let f = de.get_require(0)?;
-            let y = de.get_option(4)?;
+            let y = de.get_optional(4)?;
             Ok(TestStruct2 { f, s, m, s2, y })
         }
     }
@@ -423,7 +424,7 @@ mod tests {
             let a = de.get_require(0)?;
             let b = de.get_require(1)?;
             let v1 = de.get_require(2)?;
-            let c = de.get_option(3)?;
+            let c = de.get_optional(3)?;
             Ok(TestStruct { a, b, v1, c })
         }
     }
@@ -797,5 +798,15 @@ mod tests {
         d3.extend_from_slice(&d2);
         let mut de3 = TarsDecoder::new(&d3);
         assert_eq!(de3.get_require(0), Ok(String::from(&"foo bar"[..])));
+    }
+
+    #[test]
+    fn test_decode_bool() {
+        let d: [u8; 3] = [0x0c, 0x10, 0x01];
+        let mut de = TarsDecoder::new(&d);
+        let b: bool = de.get_require(0).unwrap();
+        let b2: bool = de.get_require(1).unwrap();
+        assert_eq!(b, false);
+        assert_eq!(b2, true);
     }
 }

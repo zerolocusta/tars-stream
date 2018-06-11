@@ -34,8 +34,8 @@ quick_error!{
         ConvertU8Err{
             description("encoder: cannot convert to u8")
         }
-        StringTooBigErr {
-            description("encoder: string len bigger than 4294967295 bytes")
+        BufferTooBigErr {
+            description("encoder: BufferTooBigErr len bigger than 4294967295 bytes")
         }
     }
 }
