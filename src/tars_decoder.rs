@@ -24,30 +24,6 @@ impl TarsDecoder {
         b.extend_from_slice(buf);
         TarsDecoder { buf: b, pos: 0 }
     }
-    // TODO: may not reset pos
-    pub fn get_require<T>(&mut self, tag: u8) -> Result<T, DecodeErr>
-    where
-        T: DecodeFrom,
-    {
-        self.pos = 0;
-        if let Ok(head) = self.skip_to_tag(tag) {
-            Ok(self.read::<T>(head.tars_type)?)
-        } else {
-            Err(DecodeErr::TagNotFoundErr)
-        }
-    }
-
-    pub fn get_optional<T>(&mut self, tag: u8) -> Result<Option<T>, DecodeErr>
-    where
-        T: DecodeFrom,
-    {
-        self.pos = 0;
-        if let Ok(head) = self.skip_to_tag(tag) {
-            Ok(Some(self.read::<T>(head.tars_type)?))
-        } else {
-            Ok(None)
-        }
-    }
 
     pub fn has_remaining(&self) -> bool {
         self.pos < self.buf.len()
@@ -57,6 +33,7 @@ impl TarsDecoder {
         self.buf.len() - self.pos
     }
 
+    // TODO: may not reset pos
     fn skip_to_tag(&mut self, tag: u8) -> Result<Head, DecodeErr> {
         let mut result: Option<Head> = None;
         while self.has_remaining() {
@@ -198,11 +175,12 @@ pub trait TarsDecoderTrait<T> {
     fn get(&mut self, tag: u8) -> Result<T, DecodeErr>;
 }
 
+// for require field
 impl<T> TarsDecoderTrait<T> for TarsDecoder
 where
     T: DecodeFrom,
 {
-    fn get(&mut self, tag: u8) -> Result<T, DecodeErr> {
+    default fn get(&mut self, tag: u8) -> Result<T, DecodeErr> {
         self.pos = 0;
         if let Ok(head) = self.skip_to_tag(tag) {
             Ok(self.read::<T>(head.tars_type)?)
@@ -212,6 +190,7 @@ where
     }
 }
 
+// for optional field
 impl<T> TarsDecoderTrait<Option<T>> for TarsDecoder
 where
     T: DecodeFrom,
@@ -435,14 +414,14 @@ impl DecodeFrom for Vec<bool> {
 
 #[cfg(test)]
 mod tests {
-    use super::{DecodeFrom, TarsDecoder};
+    use super::{DecodeFrom, TarsDecoder, TarsDecoderTrait};
     use bytes::Bytes;
     use errors::DecodeErr;
     use std::collections::BTreeMap;
     use std::mem;
     use tars_type::TarsTypeMark;
 
-    #[derive(Clone, Debug)]
+    #[derive(Clone, Debug, PartialEq)]
     struct TestStruct {
         a: i8,             // tag 0
         b: u16,            // tag 1
@@ -450,7 +429,7 @@ mod tests {
         c: Option<String>, // tag 3 option
     }
 
-    #[derive(Clone, Debug)]
+    #[derive(Clone, Debug, PartialEq)]
     struct TestStruct2 {
         f: f32,                      // 0
         s: TestStruct,               // 1
@@ -462,11 +441,11 @@ mod tests {
     impl DecodeFrom for TestStruct2 {
         fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
             let mut de = TarsDecoder::new(&b);
-            let s = de.get_require(1)?;
-            let s2 = de.get_require(3)?;
-            let m = de.get_require(2)?;
-            let f = de.get_require(0)?;
-            let y = de.get_optional(4)?;
+            let s = de.get(1)?;
+            let s2 = de.get(3)?;
+            let m = de.get(2)?;
+            let f = de.get(0)?;
+            let y = de.get(4)?;
             Ok(TestStruct2 { f, s, m, s2, y })
         }
     }
@@ -474,10 +453,10 @@ mod tests {
     impl DecodeFrom for TestStruct {
         fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
             let mut de = TarsDecoder::new(&b);
-            let a = de.get_require(0)?;
-            let b = de.get_require(1)?;
-            let v1 = de.get_require(2)?;
-            let c = de.get_optional(3)?;
+            let a = de.get(0)?;
+            let b = de.get(1)?;
+            let v1 = de.get(2)?;
+            let c = de.get(3)?;
             Ok(TestStruct { a, b, v1, c })
         }
     }
@@ -606,7 +585,7 @@ mod tests {
 
         let b2: [u8; 6] = [0x0d, 0x00, 0x00, 0x00, 0x00, 0x00];
         let mut de2 = TarsDecoder::new(&b2);
-        let v: Vec<u8> = de2.get_require(0).unwrap();
+        let v: Vec<u8> = de2.get(0).unwrap();
         assert_eq!(v, vec![]);
     }
 
@@ -677,7 +656,7 @@ mod tests {
 
         let b2: [u8; 5] = [0x99, 0, 0, 0, 0];
         let mut de2 = TarsDecoder::new(&b2[..]);
-        let v2: Vec<BTreeMap<String, i32>> = de2.get_require(9).unwrap();
+        let v2: Vec<BTreeMap<String, i32>> = de2.get(9).unwrap();
         assert_eq!(v2, vec![]);
     }
 
@@ -721,7 +700,7 @@ mod tests {
 
         let b2: [u8; 5] = [0x48, 0, 0, 0, 0];
         let mut de2 = TarsDecoder::new(&b2[..]);
-        let map2: BTreeMap<Vec<String>, BTreeMap<i32, String>> = de2.get_require(4).unwrap();
+        let map2: BTreeMap<Vec<String>, BTreeMap<i32, String>> = de2.get(4).unwrap();
         assert_eq!(map2, BTreeMap::new());
     }
 
@@ -761,7 +740,7 @@ mod tests {
         let mut de2 = TarsDecoder::new(&v);
 
         for i in 0..10 as u8 {
-            assert_eq!(de2.get_require::<u16>(i), Ok((42 + i) as u16));
+            assert_eq!(de2.get(i), Ok((42 + i) as u16));
         }
 
         // test get i16
@@ -779,7 +758,7 @@ mod tests {
         let mut de3 = TarsDecoder::new(&v2);
 
         for i in 0..10 as u8 {
-            assert_eq!(de3.get_require::<i16>(i), Ok(value));
+            assert_eq!(de3.get(i), Ok(value));
         }
     }
 
@@ -816,7 +795,7 @@ mod tests {
         let mut de3 = TarsDecoder::new(&v);
 
         for i in 0..10 as u8 {
-            assert_eq!(de3.get_require(i), Ok(value3));
+            assert_eq!(de3.get(i), Ok(value3));
         }
     }
 
@@ -862,15 +841,15 @@ mod tests {
         d3.push(0x07);
         d3.extend_from_slice(&d2);
         let mut de3 = TarsDecoder::new(&d3);
-        assert_eq!(de3.get_require(0), Ok(String::from(&"foo bar"[..])));
+        assert_eq!(de3.get(0), Ok(String::from(&"foo bar"[..])));
     }
 
     #[test]
     fn test_decode_bool() {
         let d: [u8; 3] = [0x0c, 0x10, 0x01];
         let mut de = TarsDecoder::new(&d);
-        let b: bool = de.get_require(0).unwrap();
-        let b2: bool = de.get_require(1).unwrap();
+        let b: bool = de.get(0).unwrap();
+        let b2: bool = de.get(1).unwrap();
         assert_eq!(b, false);
         assert_eq!(b2, true);
     }

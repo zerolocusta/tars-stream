@@ -791,7 +791,7 @@ mod tests {
 
     #[test]
     fn test_encode_struct() {
-        #[derive(Clone, Debug)]
+        #[derive(Clone, Debug, PartialEq)]
         struct TestStruct {
             a: i8,             // tag 0
             b: u16,            // tag 1
@@ -841,7 +841,7 @@ mod tests {
             &b"\x00\xff\x11\xff\xff\x2d\x00\x00\x00\x00\x02\xff\x00\x36\x05hello"[..]
         );
 
-        #[derive(Clone, Debug)]
+        #[derive(Clone, Debug, PartialEq)]
         struct TestStruct2 {
             f: f32,                      // 0
             s: TestStruct,               // 1
@@ -862,21 +862,21 @@ mod tests {
             }
         }
 
-            impl EncodeTo for TestStruct2 {
-                fn encode_into(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
-                    encoder.put(0, &self.f)?;
-                    encoder.put(1, &self.s)?;
-                    encoder.put(2, &self.m)?;
-                    encoder.put(3, &self.s2)?;
-                    encoder.put(4, &self.y)?;
-                    Ok(())
-                }
+        impl EncodeTo for TestStruct2 {
+            fn encode_into(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
+                encoder.put(0, &self.f)?;
+                encoder.put(1, &self.s)?;
+                encoder.put(2, &self.m)?;
+                encoder.put(3, &self.s2)?;
+                encoder.put(4, &self.y)?;
+                Ok(())
             }
+        }
 
-            let t2 = TestStruct2::new();
-            let mut encoder = TarsEncoder::new();
-            t2.encode_into(&mut encoder).unwrap();
-            assert_eq!(
+        let t2 = TestStruct2::new();
+        let mut encoder = TarsEncoder::new();
+        t2.encode_into(&mut encoder).unwrap();
+        assert_eq!(
                 &encoder.to_bytes(),
                 &b"\x04\x00\x00\x00\x00\x1a\x0c\x1c\x2d\x00\x00\x00\x00\x00\x0b\x28\x00\x00\x00\x00\x3a\x0c\x1c\x2d\x00\x00\x00\x00\x00\x0b"[..]
             );

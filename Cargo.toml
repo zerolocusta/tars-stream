@@ -6,3 +6,7 @@ authors = ["zerolocust <zerolocust@gmail.com>"]
 [dependencies]
 bytes = "0.4"
 quick-error = "1.2.2"
+
+[dev-dependencies]
+uuid = { version = "0.6", features = ["v4"] }
+rand = "0.5"
