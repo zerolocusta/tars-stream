@@ -62,7 +62,7 @@ impl TarsEncoder {
     }
 }
 
-trait TarsEncoderTrait<T> {
+pub trait TarsEncoderTrait<T> {
     fn put(&mut self, tag: u8, ele: &T) -> Result<(), EncodeErr>;
 }
 

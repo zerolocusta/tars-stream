@@ -25,25 +25,25 @@ impl TarsDecoder {
         TarsDecoder { buf: b, pos: 0 }
     }
     // TODO: may not reset pos
-    pub fn get_require<R>(&mut self, tag: u8) -> Result<R, DecodeErr>
+    pub fn get_require<T>(&mut self, tag: u8) -> Result<T, DecodeErr>
     where
-        R: DecodeFrom,
+        T: DecodeFrom,
     {
         self.pos = 0;
         if let Ok(head) = self.skip_to_tag(tag) {
-            Ok(self.read::<R>(head.tars_type)?)
+            Ok(self.read::<T>(head.tars_type)?)
         } else {
             Err(DecodeErr::TagNotFoundErr)
         }
     }
 
-    pub fn get_optional<R>(&mut self, tag: u8) -> Result<Option<R>, DecodeErr>
+    pub fn get_optional<T>(&mut self, tag: u8) -> Result<Option<T>, DecodeErr>
     where
-        R: DecodeFrom,
+        T: DecodeFrom,
     {
         self.pos = 0;
         if let Ok(head) = self.skip_to_tag(tag) {
-            Ok(Some(self.read::<R>(head.tars_type)?))
+            Ok(Some(self.read::<T>(head.tars_type)?))
         } else {
             Ok(None)
         }
@@ -69,26 +69,25 @@ impl TarsDecoder {
                 self.pos += taked_size;
             }
         }
-        println!("---------");
         match result {
             Some(h) => Ok(h),
             None => Err(DecodeErr::NoEnoughDataErr),
         }
     }
 
-    pub fn read<R>(&mut self, tars_type: u8) -> Result<R, DecodeErr>
+    pub fn read<T>(&mut self, tars_type: u8) -> Result<T, DecodeErr>
     where
-        R: DecodeFrom,
+        T: DecodeFrom,
     {
         match tars_type {
             _ if tars_type == TarsTypeMark::EnZero.value() => {
                 let b = Bytes::from(&b"\x00"[..]);
-                Ok(R::decode_from(&b)?)
+                Ok(T::decode_from(&b)?)
             }
             _ => {
                 let size = self.take_size(tars_type)?;
                 let value = self.take_then_advance(size)?;
-                Ok(R::decode_from(&value)?)
+                Ok(T::decode_from(&value)?)
             }
         }
     }
@@ -106,7 +105,6 @@ impl TarsDecoder {
                 tag = self.read::<u8>(TarsTypeMark::EnInt8.value())?;
                 2
             };
-            println!("tag: {:?} | tars_type: {:?}", tag, tars_type);
             Ok(Head {
                 tag,
                 len,
@@ -193,6 +191,38 @@ impl TarsDecoder {
         // rollback to before_pos
         self.pos = before_pos;
         Ok((after_pos - before_pos) as usize)
+    }
+}
+
+pub trait TarsDecoderTrait<T> {
+    fn get(&mut self, tag: u8) -> Result<T, DecodeErr>;
+}
+
+impl<T> TarsDecoderTrait<T> for TarsDecoder
+where
+    T: DecodeFrom,
+{
+    fn get(&mut self, tag: u8) -> Result<T, DecodeErr> {
+        self.pos = 0;
+        if let Ok(head) = self.skip_to_tag(tag) {
+            Ok(self.read::<T>(head.tars_type)?)
+        } else {
+            Err(DecodeErr::TagNotFoundErr)
+        }
+    }
+}
+
+impl<T> TarsDecoderTrait<Option<T>> for TarsDecoder
+where
+    T: DecodeFrom,
+{
+    fn get(&mut self, tag: u8) -> Result<Option<T>, DecodeErr> {
+        self.pos = 0;
+        if let Ok(head) = self.skip_to_tag(tag) {
+            Ok(Some(self.read::<T>(head.tars_type)?))
+        } else {
+            Ok(None)
+        }
     }
 }
 
@@ -432,8 +462,8 @@ mod tests {
     impl DecodeFrom for TestStruct2 {
         fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
             let mut de = TarsDecoder::new(&b);
-            let s = TestStruct::decode_from(&de.get_require(1)?)?;
-            let s2 = TestStruct::decode_from(&de.get_require(3)?)?;
+            let s = de.get_require(1)?;
+            let s2 = de.get_require(3)?;
             let m = de.get_require(2)?;
             let f = de.get_require(0)?;
             let y = de.get_optional(4)?;
@@ -550,7 +580,7 @@ mod tests {
         let value2 = s2.m.get(&String::from(&"foo bar"[..])).unwrap();
         assert_eq!(value2, &String::from(&"hello world"[..]));
 
-        assert_approx_eq!(s2.f, 0.332134f32);
+        assert!(s2.f == 0.332134f32);
 
         assert_eq!(s2.y, Some(128));
     }
@@ -795,7 +825,7 @@ mod tests {
         let b2: [u8; 8] = unsafe { mem::transmute(0.633313f64.to_bits().to_be()) };
         let mut de2 = TarsDecoder::new(&b2[..]);
         let f: f64 = de2.read(TarsTypeMark::EnDouble.value()).unwrap();
-        assert_approx_eq!(f, 0.633313f64);
+        assert!(f == 0.633313f64);
     }
 
     #[test]
@@ -803,7 +833,7 @@ mod tests {
         let b2: [u8; 4] = unsafe { mem::transmute(0.35524f32.to_bits().to_be()) };
         let mut de2 = TarsDecoder::new(&b2[..]);
         let f: f32 = de2.read(TarsTypeMark::EnFloat.value()).unwrap();
-        assert_approx_eq!(f, 0.35524f32);
+        assert!(f == 0.35524f32);
     }
 
     #[test]

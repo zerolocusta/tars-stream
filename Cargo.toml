@@ -4,9 +4,5 @@ version = "0.1.0"
 authors = ["zerolocust <zerolocust@gmail.com>"]
 
 [dependencies]
-tokio = "0.1"
-tokio-io = "0.1"
-futures = "0.1"
 bytes = "0.4"
 quick-error = "1.2.2"
-assert_approx_eq = "1.0.0"
