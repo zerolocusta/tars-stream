@@ -1,7 +1,8 @@
 [package]
 name = "tars-stream"
-version = "0.1.0"
+version = "0.0.1"
 authors = ["zerolocust <zerolocust@gmail.com>"]
+description = "for tars stream decode/encode"
 
 [dependencies]
 bytes = "0.4"
