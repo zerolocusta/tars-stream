@@ -18,5 +18,5 @@ pub mod tars_type;
 pub mod prelude {
     pub use errors::*;
     pub use tars_decoder::{DecodeFrom, TarsDecoder};
-    pub use tars_encoder::{write_struct, EncodeTo};
+    pub use tars_encoder::{EncodeTo};
 }

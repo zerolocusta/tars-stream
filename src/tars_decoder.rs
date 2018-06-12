@@ -83,12 +83,12 @@ impl TarsDecoder {
         match tars_type {
             _ if tars_type == TarsTypeMark::EnZero.value() => {
                 let b = Bytes::from(&b"\x00"[..]);
-                Ok(R::decode_from_bytes(&b)?)
+                Ok(R::decode_from(&b)?)
             }
             _ => {
                 let size = self.take_size(tars_type)?;
                 let value = self.take_then_advance(size)?;
-                Ok(R::decode_from_bytes(&value)?)
+                Ok(R::decode_from(&value)?)
             }
         }
     }
@@ -197,34 +197,34 @@ impl TarsDecoder {
 }
 
 pub trait DecodeFrom {
-    fn decode_from_bytes(&Bytes) -> Result<Self, DecodeErr>
+    fn decode_from(&Bytes) -> Result<Self, DecodeErr>
     where
         Self: Sized;
 }
 
 impl DecodeFrom for i8 {
-    fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
+    fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
         let mut cur = Cursor::new(b);
         Ok(cur.get_i8())
     }
 }
 
 impl DecodeFrom for u8 {
-    fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
+    fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
         let mut cur = Cursor::new(b);
         Ok(cur.get_u8())
     }
 }
 
 impl DecodeFrom for bool {
-    fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
-        let v = u8::decode_from_bytes(b)?;
+    fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
+        let v = u8::decode_from(b)?;
         Ok(v != 0)
     }
 }
 
 impl DecodeFrom for i16 {
-    fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
+    fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
         let mut cur = Cursor::new(b);
         if b.len() == 1 {
             Ok(i16::from(cur.get_i8()))
@@ -235,7 +235,7 @@ impl DecodeFrom for i16 {
 }
 
 impl DecodeFrom for u16 {
-    fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
+    fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
         let mut cur = Cursor::new(b);
         if b.len() == 1 {
             Ok(u16::from(cur.get_u8()))
@@ -246,7 +246,7 @@ impl DecodeFrom for u16 {
 }
 
 impl DecodeFrom for i32 {
-    fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
+    fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
         let mut cur = Cursor::new(b);
         if b.len() == 1 {
             Ok(i32::from(cur.get_i8()))
@@ -259,7 +259,7 @@ impl DecodeFrom for i32 {
 }
 
 impl DecodeFrom for u32 {
-    fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
+    fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
         let mut cur = Cursor::new(b);
         if b.len() == 1 {
             Ok(u32::from(cur.get_u8()))
@@ -272,7 +272,7 @@ impl DecodeFrom for u32 {
 }
 
 impl DecodeFrom for i64 {
-    fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
+    fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
         let mut cur = Cursor::new(b);
         if b.len() == 1 {
             Ok(i64::from(cur.get_i8()))
@@ -287,7 +287,7 @@ impl DecodeFrom for i64 {
 }
 
 impl DecodeFrom for u64 {
-    fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
+    fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
         let mut cur = Cursor::new(b);
         if b.len() == 1 {
             Ok(u64::from(cur.get_u8()))
@@ -302,21 +302,21 @@ impl DecodeFrom for u64 {
 }
 
 impl DecodeFrom for f32 {
-    fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
+    fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
         let mut cur = Cursor::new(b);
         Ok(cur.get_f32_be())
     }
 }
 
 impl DecodeFrom for f64 {
-    fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
+    fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
         let mut cur = Cursor::new(b);
         Ok(cur.get_f64_be())
     }
 }
 
 impl DecodeFrom for String {
-    fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
+    fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
         // handle invalid utf8 character
         let cow = String::from_utf8_lossy(&b);
         Ok(String::from(cow))
@@ -325,7 +325,7 @@ impl DecodeFrom for String {
 
 // from struct decoding
 impl DecodeFrom for Bytes {
-    fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
+    fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
         // clone will not copy [u8]
         Ok(Bytes::from(&b[..]))
         // b.clone()
@@ -337,7 +337,7 @@ where
     K: DecodeFrom + Ord,
     V: DecodeFrom,
 {
-    fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
+    fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
         let mut map = BTreeMap::new();
         let mut decoder = TarsDecoder::new(&b);
         while decoder.has_remaining() {
@@ -355,7 +355,7 @@ impl<T> DecodeFrom for Vec<T>
 where
     T: DecodeFrom,
 {
-    default fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
+    default fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
         let mut v = vec![];
         let mut decoder = TarsDecoder::new(&b);
         while decoder.has_remaining() {
@@ -368,7 +368,7 @@ where
 }
 
 impl DecodeFrom for Vec<u8> {
-    fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
+    fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
         let mut v: Vec<u8> = vec![];
         let mut decoder = TarsDecoder::new(&b);
         while decoder.has_remaining() {
@@ -380,7 +380,7 @@ impl DecodeFrom for Vec<u8> {
 }
 
 impl DecodeFrom for Vec<i8> {
-    fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
+    fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
         let mut v: Vec<i8> = vec![];
         let mut decoder = TarsDecoder::new(&b);
         while decoder.has_remaining() {
@@ -392,7 +392,7 @@ impl DecodeFrom for Vec<i8> {
 }
 
 impl DecodeFrom for Vec<bool> {
-    fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
+    fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
         let mut v: Vec<bool> = vec![];
         let mut decoder = TarsDecoder::new(&b);
         while decoder.has_remaining() {
@@ -430,10 +430,10 @@ mod tests {
     }
 
     impl DecodeFrom for TestStruct2 {
-        fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
+        fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
             let mut de = TarsDecoder::new(&b);
-            let s = TestStruct::decode_from_bytes(&de.get_require(1)?)?;
-            let s2 = TestStruct::decode_from_bytes(&de.get_require(3)?)?;
+            let s = TestStruct::decode_from(&de.get_require(1)?)?;
+            let s2 = TestStruct::decode_from(&de.get_require(3)?)?;
             let m = de.get_require(2)?;
             let f = de.get_require(0)?;
             let y = de.get_optional(4)?;
@@ -442,7 +442,7 @@ mod tests {
     }
 
     impl DecodeFrom for TestStruct {
-        fn decode_from_bytes(b: &Bytes) -> Result<Self, DecodeErr> {
+        fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
             let mut de = TarsDecoder::new(&b);
             let a = de.get_require(0)?;
             let b = de.get_require(1)?;
@@ -479,7 +479,7 @@ mod tests {
             list_field_2[3], // {simple list field end}
         ];
 
-        let s = TestStruct::decode_from_bytes(&Bytes::from(&buf[..])).unwrap();
+        let s = TestStruct::decode_from(&Bytes::from(&buf[..])).unwrap();
         assert_eq!(s.a, i8_field_0);
         assert_eq!(s.b, 0x0acbi16 as u16);
         assert_eq!(s.v1, list_field_2);
@@ -537,7 +537,7 @@ mod tests {
         bytes1.extend_from_slice(&b"\x40"[..]);
         bytes1.extend_from_slice(&u8_option_field_4);
 
-        let s2 = TestStruct2::decode_from_bytes(&bytes1).unwrap();
+        let s2 = TestStruct2::decode_from(&bytes1).unwrap();
         assert_eq!(s2.s.a, i8_field_0);
         assert_eq!(s2.s.b, 0x0acbi16 as u16);
         assert_eq!(s2.s.v1, list_field_2);
