@@ -4,6 +4,8 @@ version = "0.0.1"
 authors = ["zerolocust <zerolocust@gmail.com>"]
 description = "for tars tup protocol decoding/encoding"
 homepage = "https://github.com/zerolocusta/tars-stream"
+repository = "https://github.com/zerolocusta/tars-stream"
+
 license = "MIT"
 
 [dependencies]
