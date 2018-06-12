@@ -57,7 +57,7 @@ impl DecodeFrom for TestStruct {
     }
 }
 
-impl EncodeTo for TestStruct {
+impl EncodeInto for TestStruct {
     fn encode_into(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
         encoder.put(0, &self.a)?;
         encoder.put(1, &self.b)?;
@@ -186,7 +186,7 @@ impl DecodeFrom for TestStruct2 {
     }
 }
 
-impl EncodeTo for TestStruct2 {
+impl EncodeInto for TestStruct2 {
     fn encode_into(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
         encoder.put(0, &self.f1)?;
         encoder.put(1, &self.f2)?;

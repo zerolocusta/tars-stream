@@ -68,7 +68,7 @@ pub trait TarsEncoderTrait<T> {
 
 impl<T> TarsEncoderTrait<T> for TarsEncoder
 where
-    T: EncodeTo,
+    T: EncodeInto,
 {
     // specialization for all tars type expect struct
     default fn put(&mut self, tag: u8, ele: &T) -> Result<(), EncodeErr> {
@@ -244,8 +244,8 @@ impl TarsEncoderTrait<String> for TarsEncoder {
 
 impl<K, V> TarsEncoderTrait<BTreeMap<K, V>> for TarsEncoder
 where
-    K: EncodeTo + Ord,
-    V: EncodeTo,
+    K: EncodeInto + Ord,
+    V: EncodeInto,
 {
     fn put(&mut self, tag: u8, ele: &BTreeMap<K, V>) -> Result<(), EncodeErr> {
         self.put_head(tag, EnMaps)?;
@@ -256,7 +256,7 @@ where
 
 impl<T> TarsEncoderTrait<Vec<T>> for TarsEncoder
 where
-    T: EncodeTo,
+    T: EncodeInto,
 {
     default fn put(&mut self, tag: u8, ele: &Vec<T>) -> Result<(), EncodeErr> {
         self.put_head(tag, EnList)?;
@@ -294,7 +294,7 @@ impl TarsEncoderTrait<Vec<bool>> for TarsEncoder {
 
 impl<T> TarsEncoderTrait<Option<T>> for TarsEncoder
 where
-    T: EncodeTo,
+    T: EncodeInto,
 {
     fn put(&mut self, tag: u8, ele: &Option<T>) -> Result<(), EncodeErr> {
         match ele {
@@ -307,99 +307,99 @@ where
     }
 }
 
-// EncodeTo Trait, 各类型将自身写入 TarsEncoder 中
-pub trait EncodeTo {
+// EncodeInto Trait, 各类型将自身写入 TarsEncoder 中
+pub trait EncodeInto {
     fn encode_into(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr>;
 }
 
-impl EncodeTo for i8 {
+impl EncodeInto for i8 {
     fn encode_into(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
         encoder.buf.put_i8(*self);
         Ok(())
     }
 }
 
-impl EncodeTo for u8 {
+impl EncodeInto for u8 {
     fn encode_into(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
         encoder.buf.put_u8(*self);
         Ok(())
     }
 }
 
-impl EncodeTo for i16 {
+impl EncodeInto for i16 {
     fn encode_into(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
         encoder.buf.put_i16_be(*self);
         Ok(())
     }
 }
 
-impl EncodeTo for u16 {
+impl EncodeInto for u16 {
     fn encode_into(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
         encoder.buf.put_u16_be(*self);
         Ok(())
     }
 }
 
-impl EncodeTo for i32 {
+impl EncodeInto for i32 {
     fn encode_into(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
         encoder.buf.put_i32_be(*self);
         Ok(())
     }
 }
 
-impl EncodeTo for u32 {
+impl EncodeInto for u32 {
     fn encode_into(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
         encoder.buf.put_u32_be(*self);
         Ok(())
     }
 }
 
-impl EncodeTo for i64 {
+impl EncodeInto for i64 {
     fn encode_into(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
         encoder.buf.put_i64_be(*self);
         Ok(())
     }
 }
 
-impl EncodeTo for u64 {
+impl EncodeInto for u64 {
     fn encode_into(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
         encoder.buf.put_u64_be(*self);
         Ok(())
     }
 }
 
-impl EncodeTo for f32 {
+impl EncodeInto for f32 {
     fn encode_into(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
         encoder.buf.put_f32_be(*self);
         Ok(())
     }
 }
 
-impl EncodeTo for f64 {
+impl EncodeInto for f64 {
     fn encode_into(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
         encoder.buf.put_f64_be(*self);
         Ok(())
     }
 }
 
-impl EncodeTo for bool {
+impl EncodeInto for bool {
     fn encode_into(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
         let value: u8 = if *self { 1 } else { 0 };
         value.encode_into(encoder)
     }
 }
 
-impl EncodeTo for String {
+impl EncodeInto for String {
     fn encode_into(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
         encoder.buf.put(self);
         Ok(())
     }
 }
 
-impl<K, V> EncodeTo for BTreeMap<K, V>
+impl<K, V> EncodeInto for BTreeMap<K, V>
 where
-    K: EncodeTo + Ord,
-    V: EncodeTo,
+    K: EncodeInto + Ord,
+    V: EncodeInto,
 {
     fn encode_into(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
         let mut inner_encoder = TarsEncoder::new();
@@ -421,9 +421,9 @@ where
     }
 }
 
-impl<T> EncodeTo for Vec<T>
+impl<T> EncodeInto for Vec<T>
 where
-    T: EncodeTo,
+    T: EncodeInto,
 {
     default fn encode_into(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
         let mut inner_encoder = TarsEncoder::new();
@@ -444,7 +444,7 @@ where
     }
 }
 
-impl EncodeTo for Vec<u8> {
+impl EncodeInto for Vec<u8> {
     fn encode_into(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
         if self.len() > u32::max_value() as usize {
             Err(EncodeErr::BufferTooBigErr)
@@ -459,7 +459,7 @@ impl EncodeTo for Vec<u8> {
     }
 }
 
-impl EncodeTo for Vec<i8> {
+impl EncodeInto for Vec<i8> {
     fn encode_into(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
         if self.len() > u32::max_value() as usize {
             Err(EncodeErr::BufferTooBigErr)
@@ -474,7 +474,7 @@ impl EncodeTo for Vec<i8> {
     }
 }
 
-impl EncodeTo for Vec<bool> {
+impl EncodeInto for Vec<bool> {
     fn encode_into(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
         if self.len() > u32::max_value() as usize {
             Err(EncodeErr::BufferTooBigErr)
@@ -810,7 +810,7 @@ mod tests {
             }
         }
 
-        impl EncodeTo for TestStruct {
+        impl EncodeInto for TestStruct {
             fn encode_into(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
                 encoder.put(0, &self.a)?;
                 encoder.put(1, &self.b)?;
@@ -862,7 +862,7 @@ mod tests {
             }
         }
 
-        impl EncodeTo for TestStruct2 {
+        impl EncodeInto for TestStruct2 {
             fn encode_into(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
                 encoder.put(0, &self.f)?;
                 encoder.put(1, &self.s)?;
