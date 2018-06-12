@@ -1,2 +1,2 @@
 # tars-stream
-for tar wup protocol decoding/encoding
+for tars tup protocol decoding/encoding
