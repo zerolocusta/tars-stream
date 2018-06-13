@@ -63,7 +63,7 @@ impl TestStruct {
 }
 
 impl DecodeFromTars for TestStruct {
-    fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
+    fn decode_from_tars(b: &Bytes) -> Result<Self, DecodeErr> {
         let mut de = TarsDecoder::from(b);
         let a = de.get(0)?;
         let b = de.get(1)?;
@@ -83,7 +83,7 @@ impl DecodeFromTars for TestStruct {
 }
 
 impl EncodeIntoTars for TestStruct {
-    fn encode_into(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
+    fn encode_into_tars(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
         encoder.put(0, &self.a)?;
         encoder.put(1, &self.b)?;
         encoder.put(2, &self.v1)?;
@@ -102,18 +102,18 @@ fn test_encode_decode_struct() {
     let mut encoder = TarsEncoder::new();
     let ts = TestStruct::new();
 
-    ts.encode_into(&mut encoder).unwrap();
+    ts.encode_into_tars(&mut encoder).unwrap();
 
-    let de_ts = TestStruct::decode_from(&encoder.to_bytes()).unwrap();
+    let de_ts = TestStruct::decode_from_tars(&encoder.to_bytes()).unwrap();
 
     assert_eq!(de_ts, ts);
 
     let mut encoder = TarsEncoder::new();
     let ts = TestStruct::random_for_test();
 
-    ts.encode_into(&mut encoder).unwrap();
+    ts.encode_into_tars(&mut encoder).unwrap();
 
-    let de_ts = TestStruct::decode_from(&encoder.to_bytes()).unwrap();
+    let de_ts = TestStruct::decode_from_tars(&encoder.to_bytes()).unwrap();
 
     assert_eq!(de_ts, ts);
 }
@@ -131,7 +131,6 @@ struct TestStruct2 {
     u1: u8,  // 6
     u2: u16, // 7
     u3: u32, // 8
-    u4: u64, // 9
 
     b: bool, // 10
 
@@ -157,7 +156,6 @@ impl TestStruct2 {
             u1: 0, // 6
             u2: 0, // 7
             u3: 0, // 8
-            u4: 0, // 9
 
             b: false,
 
@@ -172,7 +170,7 @@ impl TestStruct2 {
 }
 
 impl DecodeFromTars for TestStruct2 {
-    fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
+    fn decode_from_tars(b: &Bytes) -> Result<Self, DecodeErr> {
         let mut de = TarsDecoder::from(b);
         let f1 = de.get(0)?;
         let f2 = de.get(1)?;
@@ -185,7 +183,6 @@ impl DecodeFromTars for TestStruct2 {
         let u1 = de.get(6)?;
         let u2 = de.get(7)?;
         let u3 = de.get(8)?;
-        let u4 = de.get(9)?;
 
         let b = de.get(10)?;
 
@@ -205,7 +202,6 @@ impl DecodeFromTars for TestStruct2 {
             u1,
             u2,
             u3,
-            u4,
             b,
             s,
             v,
@@ -218,7 +214,7 @@ impl DecodeFromTars for TestStruct2 {
 }
 
 impl EncodeIntoTars for TestStruct2 {
-    fn encode_into(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
+    fn encode_into_tars(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
         encoder.put(0, &self.f1)?;
         encoder.put(1, &self.f2)?;
 
@@ -230,7 +226,6 @@ impl EncodeIntoTars for TestStruct2 {
         encoder.put(6, &self.u1)?;
         encoder.put(7, &self.u2)?;
         encoder.put(8, &self.u3)?;
-        encoder.put(9, &self.u4)?;
 
         encoder.put(10, &self.b)?;
         encoder.put(11, &self.s)?;
@@ -253,9 +248,9 @@ fn test_encode_decode_struct2() {
 
     let mut ts = TestStruct2::new();
 
-    ts.encode_into(&mut encoder).unwrap();
+    ts.encode_into_tars(&mut encoder).unwrap();
 
-    let de_ts = TestStruct2::decode_from(&encoder.to_bytes()).unwrap();
+    let de_ts = TestStruct2::decode_from_tars(&encoder.to_bytes()).unwrap();
 
     assert_eq!(de_ts, ts);
 
@@ -272,7 +267,6 @@ fn test_encode_decode_struct2() {
     ts.u1 = random();
     ts.u2 = random();
     ts.u3 = random();
-    ts.u4 = random();
 
     ts.b = random();
 
@@ -295,9 +289,9 @@ fn test_encode_decode_struct2() {
 
     let mut encoder = TarsEncoder::new();
 
-    ts.encode_into(&mut encoder).unwrap();
+    ts.encode_into_tars(&mut encoder).unwrap();
 
-    let de_ts = TestStruct2::decode_from(&encoder.to_bytes()).unwrap();
+    let de_ts = TestStruct2::decode_from_tars(&encoder.to_bytes()).unwrap();
 
     assert_eq!(de_ts, ts);
 
@@ -307,9 +301,9 @@ fn test_encode_decode_struct2() {
 
     let mut encoder = TarsEncoder::new();
 
-    ts.encode_into(&mut encoder).unwrap();
+    ts.encode_into_tars(&mut encoder).unwrap();
 
-    let de_ts = TestStruct2::decode_from(&encoder.to_bytes()).unwrap();
+    let de_ts = TestStruct2::decode_from_tars(&encoder.to_bytes()).unwrap();
 
     assert_eq!(de_ts, ts);
 }

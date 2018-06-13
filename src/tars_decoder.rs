@@ -26,6 +26,15 @@ impl TarsDecoder {
         }
     }
 
+    pub fn individual_decode<T>(buf: &Bytes) -> Result<T, DecodeErr>
+    where
+        T: DecodeFromTars,
+    {
+        let mut decoder = TarsDecoder::from(buf);
+        let head = decoder.take_head()?;
+        decoder.read(head.tars_type)
+    }
+
     pub fn has_remaining(&self) -> bool {
         self.pos < self.buf.len()
     }
@@ -60,12 +69,12 @@ impl TarsDecoder {
         match tars_type {
             _ if tars_type == TarsTypeMark::EnZero.value() => {
                 let b = Bytes::from(&b"\x00"[..]);
-                Ok(T::decode_from(&b)?)
+                Ok(T::decode_from_tars(&b)?)
             }
             _ => {
                 let size = self.take_size(tars_type)?;
                 let value = self.take_then_advance(size)?;
-                Ok(T::decode_from(&value)?)
+                Ok(T::decode_from_tars(&value)?)
             }
         }
     }
@@ -74,15 +83,17 @@ impl TarsDecoder {
         if self.remaining() < 1 {
             Err(DecodeErr::NoEnoughDataErr)
         } else {
-            let b = self.read::<u8>(TarsTypeMark::EnInt8.value())?;
+            let mut cur = Cursor::new(&self.buf[self.pos..]);
+            let b = cur.get_u8();
             let tars_type = b & 0x0f;
             let mut tag = (b & 0xf0) >> 4;
             let len = if tag < 15 {
                 1
             } else {
-                tag = self.read::<u8>(TarsTypeMark::EnInt8.value())?;
+                tag = cur.get_u8();
                 2
             };
+            self.pos += len as usize;
             Ok(Head {
                 tag,
                 len,
@@ -126,27 +137,32 @@ impl TarsDecoder {
     }
 
     fn take_string_size(&mut self, tars_type: u8) -> Result<usize, DecodeErr> {
+        let mut cur = Cursor::new(&self.buf[self.pos..]);
         if tars_type == TarsTypeMark::EnString1.value() {
-            Ok(self.read::<u8>(TarsTypeMark::EnInt8.value())? as usize)
+            let size = cur.get_u8() as usize;
+            self.pos += 1;
+            Ok(size as usize)
         } else if tars_type == TarsTypeMark::EnString4.value() {
-            Ok(self.read::<u32>(TarsTypeMark::EnInt32.value())? as usize)
+            let size = cur.get_u32_be() as usize;
+            self.pos += 4;
+            Ok(size as usize)
         } else {
             Err(DecodeErr::UnknownTarsTypeErr)
         }
     }
 
     fn take_map_size(&mut self) -> Result<usize, DecodeErr> {
-        Ok(self.read::<u32>(TarsTypeMark::EnInt32.value())? as usize)
+        Ok(self.read::<i32>(TarsTypeMark::EnInt32.value())? as usize)
     }
 
     fn take_list_size(&mut self) -> Result<usize, DecodeErr> {
-        Ok(self.read::<u32>(TarsTypeMark::EnInt32.value())? as usize)
+        Ok(self.read::<i32>(TarsTypeMark::EnInt32.value())? as usize)
     }
 
     fn take_simple_list_size(&mut self) -> Result<usize, DecodeErr> {
         let head = self.take_head()?; // consume header (list type)
         if head.tars_type == TarsTypeMark::EnInt8.value() {
-            Ok(self.read::<u32>(TarsTypeMark::EnInt32.value())? as usize)
+            Ok(self.read::<i32>(TarsTypeMark::EnInt32.value())? as usize)
         } else {
             Err(DecodeErr::WrongSimpleListTarsTypeErr)
         }
@@ -227,34 +243,29 @@ where
 }
 
 pub trait DecodeFromTars {
-    fn decode_from(&Bytes) -> Result<Self, DecodeErr>
+    fn decode_from_tars(&Bytes) -> Result<Self, DecodeErr>
     where
         Self: Sized;
 }
 
 impl DecodeFromTars for i8 {
-    fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
+    // 对应 tars::Char, 1 字节
+    fn decode_from_tars(b: &Bytes) -> Result<Self, DecodeErr> {
         let mut cur = Cursor::new(b);
         Ok(cur.get_i8())
     }
 }
 
-impl DecodeFromTars for u8 {
-    fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
-        let mut cur = Cursor::new(b);
-        Ok(cur.get_u8())
-    }
-}
-
 impl DecodeFromTars for bool {
-    fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
-        let v = u8::decode_from(b)?;
+    fn decode_from_tars(b: &Bytes) -> Result<Self, DecodeErr> {
+        let v = i8::decode_from_tars(b)?;
         Ok(v != 0)
     }
 }
 
 impl DecodeFromTars for i16 {
-    fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
+    // 对应 tars::Short, 2 字节
+    fn decode_from_tars(b: &Bytes) -> Result<Self, DecodeErr> {
         let mut cur = Cursor::new(b);
         if b.len() == 1 {
             Ok(i16::from(cur.get_i8()))
@@ -264,19 +275,9 @@ impl DecodeFromTars for i16 {
     }
 }
 
-impl DecodeFromTars for u16 {
-    fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
-        let mut cur = Cursor::new(b);
-        if b.len() == 1 {
-            Ok(u16::from(cur.get_u8()))
-        } else {
-            Ok(cur.get_u16_be())
-        }
-    }
-}
-
 impl DecodeFromTars for i32 {
-    fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
+    // 对应 tars::Int32, 最大 4 字节
+    fn decode_from_tars(b: &Bytes) -> Result<Self, DecodeErr> {
         let mut cur = Cursor::new(b);
         if b.len() == 1 {
             Ok(i32::from(cur.get_i8()))
@@ -288,21 +289,9 @@ impl DecodeFromTars for i32 {
     }
 }
 
-impl DecodeFromTars for u32 {
-    fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
-        let mut cur = Cursor::new(b);
-        if b.len() == 1 {
-            Ok(u32::from(cur.get_u8()))
-        } else if b.len() == 2 {
-            Ok(u32::from(cur.get_u16_be()))
-        } else {
-            Ok(cur.get_u32_be())
-        }
-    }
-}
-
 impl DecodeFromTars for i64 {
-    fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
+    // 对应 tars::Int64, 最大 8 字节
+    fn decode_from_tars(b: &Bytes) -> Result<Self, DecodeErr> {
         let mut cur = Cursor::new(b);
         if b.len() == 1 {
             Ok(i64::from(cur.get_i8()))
@@ -316,37 +305,48 @@ impl DecodeFromTars for i64 {
     }
 }
 
-impl DecodeFromTars for u64 {
-    fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
-        let mut cur = Cursor::new(b);
-        if b.len() == 1 {
-            Ok(u64::from(cur.get_u8()))
-        } else if b.len() == 2 {
-            Ok(u64::from(cur.get_u16_be()))
-        } else if b.len() == 4 {
-            Ok(u64::from(cur.get_u32_be()))
-        } else {
-            Ok(cur.get_u64_be())
-        }
+impl DecodeFromTars for u8 {
+    fn decode_from_tars(b: &Bytes) -> Result<Self, DecodeErr> {
+        Ok(i16::decode_from_tars(b)? as u8)
+    }
+}
+
+impl DecodeFromTars for u16 {
+    fn decode_from_tars(b: &Bytes) -> Result<Self, DecodeErr> {
+        Ok(i32::decode_from_tars(b)? as u16)
+    }
+}
+
+impl DecodeFromTars for u32 {
+    fn decode_from_tars(b: &Bytes) -> Result<Self, DecodeErr> {
+        Ok(i64::decode_from_tars(b)? as u32)
     }
 }
 
 impl DecodeFromTars for f32 {
-    fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
-        let mut cur = Cursor::new(b);
-        Ok(cur.get_f32_be())
+    fn decode_from_tars(b: &Bytes) -> Result<Self, DecodeErr> {
+        if b.len() == 1 {
+            Ok(0.0)
+        } else {
+            let mut cur = Cursor::new(b);
+            Ok(cur.get_f32_be())
+        }
     }
 }
 
 impl DecodeFromTars for f64 {
-    fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
-        let mut cur = Cursor::new(b);
-        Ok(cur.get_f64_be())
+    fn decode_from_tars(b: &Bytes) -> Result<Self, DecodeErr> {
+        if b.len() == 1 {
+            Ok(0.0)
+        } else {
+            let mut cur = Cursor::new(b);
+            Ok(cur.get_f64_be())
+        }
     }
 }
 
 impl DecodeFromTars for String {
-    fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
+    fn decode_from_tars(b: &Bytes) -> Result<Self, DecodeErr> {
         // handle invalid utf8 character
         let cow = String::from_utf8_lossy(&b);
         Ok(String::from(cow))
@@ -355,7 +355,7 @@ impl DecodeFromTars for String {
 
 // from struct decoding
 impl DecodeFromTars for Bytes {
-    fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
+    fn decode_from_tars(b: &Bytes) -> Result<Self, DecodeErr> {
         Ok(b.clone())
     }
 }
@@ -365,7 +365,7 @@ where
     K: DecodeFromTars + Ord,
     V: DecodeFromTars,
 {
-    fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
+    fn decode_from_tars(b: &Bytes) -> Result<Self, DecodeErr> {
         let mut map = BTreeMap::new();
         let mut decoder = TarsDecoder::from(&b[..]);
         while decoder.has_remaining() {
@@ -383,7 +383,7 @@ impl<T> DecodeFromTars for Vec<T>
 where
     T: DecodeFromTars,
 {
-    default fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
+    default fn decode_from_tars(b: &Bytes) -> Result<Self, DecodeErr> {
         let mut v = vec![];
         let mut decoder = TarsDecoder::from(b);
         while decoder.has_remaining() {
@@ -395,22 +395,15 @@ where
     }
 }
 
-impl DecodeFromTars for Vec<u8> {
-    fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
-        let v: Vec<u8> = b.to_vec();
-        Ok(v)
-    }
-}
-
 impl DecodeFromTars for Vec<i8> {
-    fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
+    fn decode_from_tars(b: &Bytes) -> Result<Self, DecodeErr> {
         let v: Vec<i8> = unsafe { mem::transmute(b.to_vec()) };
         Ok(v)
     }
 }
 
 impl DecodeFromTars for Vec<bool> {
-    fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
+    fn decode_from_tars(b: &Bytes) -> Result<Self, DecodeErr> {
         let v: Vec<bool> = unsafe { mem::transmute(b.to_vec()) };
         Ok(v)
     }
@@ -424,149 +417,6 @@ mod tests {
     use std::collections::BTreeMap;
     use std::mem;
     use tars_type::TarsTypeMark;
-
-    #[derive(Clone, Debug, PartialEq)]
-    struct TestStruct {
-        a: i8,             // tag 0
-        b: u16,            // tag 1
-        v1: Vec<u8>,       // tag 2
-        c: Option<String>, // tag 3 option
-    }
-
-    #[derive(Clone, Debug, PartialEq)]
-    struct TestStruct2 {
-        f: f32,                      // 0
-        s: TestStruct,               // 1
-        m: BTreeMap<String, String>, // 2
-        s2: TestStruct,              // 3
-        y: Option<u8>,               // 4 option
-    }
-
-    impl DecodeFromTars for TestStruct2 {
-        fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
-            let mut de = TarsDecoder::from(b);
-            let s = de.get(1)?;
-            let s2 = de.get(3)?;
-            let m = de.get(2)?;
-            let f = de.get(0)?;
-            let y = de.get(4)?;
-            Ok(TestStruct2 { f, s, m, s2, y })
-        }
-    }
-
-    impl DecodeFromTars for TestStruct {
-        fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
-            let mut de = TarsDecoder::from(b);
-            let a = de.get(0)?;
-            let b = de.get(1)?;
-            let v1 = de.get(2)?;
-            let c = de.get(3)?;
-            Ok(TestStruct { a, b, v1, c })
-        }
-    }
-
-    #[test]
-    fn test_decode_struct() {
-        let i8_field_0: i8 = -127;
-
-        let u16_field_1: [u8; 2] = unsafe { mem::transmute(0x0acbi16.to_be()) };
-
-        let list_head_2: [u8; 4] = unsafe { mem::transmute(4u32.to_be()) };
-        let list_field_2: Vec<u8> = vec![4, 5, 6, 7];
-
-        let buf: [u8; 15] = [
-            0x00, // {i8 field start, tag 0}
-            i8_field_0 as u8,
-            0x11, // {u16 field start, tag 1}
-            u16_field_1[0],
-            u16_field_1[1],
-            0x2d, // {simple list field start, tag 2}
-            0x00,
-            list_head_2[0],
-            list_head_2[1],
-            list_head_2[2],
-            list_head_2[3],
-            list_field_2[0],
-            list_field_2[1],
-            list_field_2[2],
-            list_field_2[3], // {simple list field end}
-        ];
-
-        let s = TestStruct::decode_from(&Bytes::from(&buf[..])).unwrap();
-        assert_eq!(s.a, i8_field_0);
-        assert_eq!(s.b, 0x0acbi16 as u16);
-        assert_eq!(s.v1, list_field_2);
-        assert_eq!(s.c, None);
-        let size: [u8; 4] = unsafe { mem::transmute(22u32.to_be()) };
-        let map_field: [u8; 26] = [
-            size[0],
-            size[1],
-            size[2],
-            size[3],
-            // {tag: 0, type: 6}
-            0x06,
-            7,
-            b'f',
-            b'o',
-            b'o',
-            b' ',
-            b'b',
-            b'a',
-            b'r',
-            // {tag: 0, type: 6}
-            0x06,
-            11,
-            b'h',
-            b'e',
-            b'l',
-            b'l',
-            b'o',
-            b' ',
-            b'w',
-            b'o',
-            b'r',
-            b'l',
-            b'd',
-        ];
-
-        let float_field: [u8; 4] = unsafe { mem::transmute(0.332134f32.to_bits().to_be()) };
-
-        let mut bytes1 = Bytes::new();
-        bytes1.extend_from_slice(&b"\x1a"[..]); // struct begin, tag 1
-        bytes1.extend_from_slice(&buf); // struct begin, tag 1
-        bytes1.extend_from_slice(&b"\x0b"[..]); // struct begin, tag 1
-
-        bytes1.extend_from_slice(&b"\x3a"[..]); // struct begin, tag 3
-        bytes1.extend_from_slice(&buf); // struct begin, tag 1
-        bytes1.extend_from_slice(&b"\x0b"[..]); // struct begin, tag 3
-
-        bytes1.extend_from_slice(&b"\x28"[..]);
-        bytes1.extend_from_slice(&map_field);
-
-        bytes1.extend_from_slice(&b"\x04"[..]);
-        bytes1.extend_from_slice(&float_field);
-
-        let u8_option_field_4: [u8; 1] = [128];
-        bytes1.extend_from_slice(&b"\x40"[..]);
-        bytes1.extend_from_slice(&u8_option_field_4);
-
-        let s2 = TestStruct2::decode_from(&bytes1).unwrap();
-        assert_eq!(s2.s.a, i8_field_0);
-        assert_eq!(s2.s.b, 0x0acbi16 as u16);
-        assert_eq!(s2.s.v1, list_field_2);
-        assert_eq!(s2.s.c, None);
-        assert_eq!(s2.s2.a, i8_field_0);
-        assert_eq!(s2.s2.b, 0x0acbi16 as u16);
-        assert_eq!(s2.s2.v1, list_field_2);
-        assert_eq!(s2.s2.c, None);
-
-        let value2 = s2.m.get(&String::from(&"foo bar"[..])).unwrap();
-        assert_eq!(value2, &String::from(&"hello world"[..]));
-
-        assert!(s2.f == 0.332134f32);
-
-        assert_eq!(s2.y, Some(128));
-    }
 
     #[test]
     fn test_take_simple_list() {
@@ -583,8 +433,8 @@ mod tests {
             7,
         ];
         let mut de = TarsDecoder::from(&b[..]);
-        let list: Vec<u8> = de.read(TarsTypeMark::EnSimplelist.value()).unwrap();
-        let result: Vec<u8> = vec![4, 5, 6, 7];
+        let list: Vec<i8> = de.read(TarsTypeMark::EnSimplelist.value()).unwrap();
+        let result: Vec<i8> = vec![4, 5, 6, 7];
         assert_eq!(list, result);
 
         let b2: [u8; 6] = [0x0d, 0x00, 0x00, 0x00, 0x00, 0x00];
@@ -599,7 +449,6 @@ mod tests {
         let v0: u8 = de.read(TarsTypeMark::EnZero.value()).unwrap();
         let v1: u16 = de.read(TarsTypeMark::EnZero.value()).unwrap();
         let v2: u32 = de.read(TarsTypeMark::EnZero.value()).unwrap();
-        let v3: u64 = de.read(TarsTypeMark::EnZero.value()).unwrap();
         let v4: i8 = de.read(TarsTypeMark::EnZero.value()).unwrap();
         let v5: i16 = de.read(TarsTypeMark::EnZero.value()).unwrap();
         let v6: i32 = de.read(TarsTypeMark::EnZero.value()).unwrap();
@@ -608,7 +457,6 @@ mod tests {
         assert_eq!(v0, 0);
         assert_eq!(v1, 0);
         assert_eq!(v2, 0);
-        assert_eq!(v3, 0);
         assert_eq!(v4, 0);
         assert_eq!(v5, 0);
         assert_eq!(v6, 0);

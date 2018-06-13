@@ -13,8 +13,14 @@ quick_error!{
         WrongSimpleListTarsTypeErr {
             description("decoder: wrong simple list type")
         }
-        FieldNotFoundErr {
-            description("decoder: required field not found")
+        InvalidEnumValue {
+            description("decoder: invalid enum value")
+        }
+        FieldNotFoundErr(desc: String) {
+            description(desc)
+        }
+        TypeNotFoundErr(desc: String) {
+            description(desc)
         }
     }
 }

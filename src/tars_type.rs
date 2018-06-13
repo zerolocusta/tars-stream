@@ -45,3 +45,81 @@ impl From<u8> for ProtocolVersion {
         }
     }
 }
+
+pub trait EnumMarker {}
+
+pub trait ClassName {
+    fn class_name() -> String;
+}
+
+impl ClassName for bool {
+    fn class_name() -> String {
+        String::from("bool")
+    }
+}
+
+impl ClassName for i8 {
+    fn class_name() -> String {
+        String::from("char")
+    }
+}
+
+impl ClassName for i16 {
+    fn class_name() -> String {
+        String::from("short")
+    }
+}
+
+impl ClassName for i32 {
+    fn class_name() -> String {
+        String::from("int32")
+    }
+}
+
+impl ClassName for i64 {
+    fn class_name() -> String {
+        String::from("int64")
+    }
+}
+
+impl ClassName for u8 {
+    fn class_name() -> String {
+        String::from("char")
+    }
+}
+
+impl ClassName for u16 {
+    fn class_name() -> String {
+        String::from("short")
+    }
+}
+
+impl ClassName for u32 {
+    fn class_name() -> String {
+        String::from("int32")
+    }
+}
+
+impl ClassName for f32 {
+    fn class_name() -> String {
+        String::from("float")
+    }
+}
+
+impl ClassName for f64 {
+    fn class_name() -> String {
+        String::from("double")
+    }
+}
+
+impl ClassName for String {
+    fn class_name() -> String {
+        String::from("string")
+    }
+}
+
+impl<T: EnumMarker> ClassName for T {
+    fn class_name() -> String {
+        String::from("i32")
+    } 
+}
