@@ -64,7 +64,7 @@ impl TestStruct {
     }
 }
 
-impl DecodeFrom for TestStruct {
+impl DecodeFromTars for TestStruct {
     fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
         let mut de = TarsDecoder::new(&b);
         let a = de.get(0)?;
@@ -84,7 +84,7 @@ impl DecodeFrom for TestStruct {
     }
 }
 
-impl EncodeInto for TestStruct {
+impl EncodeIntoTars for TestStruct {
     fn encode_into(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
         encoder.put(0, &self.a)?;
         encoder.put(1, &self.b)?;
@@ -171,7 +171,7 @@ impl TestStruct2 {
     }
 }
 
-impl DecodeFrom for TestStruct2 {
+impl DecodeFromTars for TestStruct2 {
     fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
         let mut de = TarsDecoder::new(&b);
         let f1 = de.get(0)?;
@@ -215,7 +215,7 @@ impl DecodeFrom for TestStruct2 {
     }
 }
 
-impl EncodeInto for TestStruct2 {
+impl EncodeIntoTars for TestStruct2 {
     fn encode_into(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
         encoder.put(0, &self.f1)?;
         encoder.put(1, &self.f2)?;
