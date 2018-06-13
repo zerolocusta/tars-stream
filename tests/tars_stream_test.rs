@@ -18,6 +18,8 @@ struct TestStruct {
     b: u16,            // tag 1
     v1: Vec<u8>,       // tag 2
     c: Option<String>, // tag 3 option
+    v2: Vec<i8>,
+    v3: Vec<bool>,
 }
 
 impl TestStruct {
@@ -27,21 +29,37 @@ impl TestStruct {
             b: 0,
             v1: vec![],
             c: None,
+            v2: vec![],
+            v3: vec![],
         }
     }
 
     pub fn random_for_test() -> Self {
         let vec_len: u8 = random();
-        let mut v = vec![];
+        let mut v1 = vec![];
         for _ in 0..vec_len {
-            v.push(random());
+            v1.push(random());
+        }
+
+        let vec_len: u8 = random();
+        let mut v2 = vec![];
+        for _ in 0..vec_len {
+            v2.push(random());
+        }
+
+        let vec_len: u8 = random();
+        let mut v3 = vec![];
+        for _ in 0..vec_len {
+            v3.push(random());
         }
 
         TestStruct {
             a: random(),
             b: random(),
-            v1: v,
+            v1: v1,
             c: Some(Uuid::new_v4().to_string()),
+            v2: v2,
+            v3: v3,
         }
     }
 }
@@ -53,7 +71,16 @@ impl DecodeFrom for TestStruct {
         let b = de.get(1)?;
         let v1 = de.get(2)?;
         let c = de.get(3)?;
-        Ok(TestStruct { a, b, v1, c })
+        let v2 = de.get(4)?;
+        let v3 = de.get(5)?;
+        Ok(TestStruct {
+            a,
+            b,
+            v1,
+            c,
+            v2,
+            v3,
+        })
     }
 }
 
@@ -63,6 +90,8 @@ impl EncodeInto for TestStruct {
         encoder.put(1, &self.b)?;
         encoder.put(2, &self.v1)?;
         encoder.put(3, &self.c)?;
+        encoder.put(4, &self.v2)?;
+        encoder.put(5, &self.v3)?;
         Ok(())
     }
 }
@@ -227,7 +256,6 @@ fn test_encode_decode_struct2() {
 
     assert_eq!(de_ts, ts);
 
-
     // case 2
 
     ts.f1 = random();
@@ -246,7 +274,7 @@ fn test_encode_decode_struct2() {
     ts.b = random();
 
     ts.s = TestStruct::random_for_test();
-    
+
     let v_len: u8 = random();
     for _ in 0..v_len {
         ts.v.push(TestStruct::random_for_test());
@@ -254,7 +282,8 @@ fn test_encode_decode_struct2() {
 
     let m_len: u8 = random();
     for _ in 0..m_len {
-        ts.m.insert(Uuid::new_v4().to_string(), Uuid::new_v4().to_string());
+        ts.m
+            .insert(Uuid::new_v4().to_string(), Uuid::new_v4().to_string());
     }
 
     ts.y = Some(random());
@@ -278,4 +307,5 @@ fn test_encode_decode_struct2() {
 
     let de_ts = TestStruct2::decode_from(&encoder.to_bytes()).unwrap();
 
-    assert_eq!(de_ts, ts);}
+    assert_eq!(de_ts, ts);
+}

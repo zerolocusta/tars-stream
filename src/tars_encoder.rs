@@ -451,9 +451,7 @@ impl EncodeInto for Vec<u8> {
         } else {
             encoder.buf.reserve(MAX_SIZE_LEN + self.len());
             encoder.buf.put_u32_be(self.len() as u32);
-            for ele in self.into_iter() {
-                ele.encode_into(encoder)?;
-            }
+            encoder.buf.extend_from_slice(self);
             Ok(())
         }
     }
@@ -466,9 +464,9 @@ impl EncodeInto for Vec<i8> {
         } else {
             encoder.buf.reserve(MAX_SIZE_LEN + self.len());
             encoder.buf.put_u32_be(self.len() as u32);
-            for ele in self.into_iter() {
-                ele.encode_into(encoder)?;
-            }
+            encoder
+                .buf
+                .extend_from_slice(unsafe { mem::transmute(self.as_slice()) });
             Ok(())
         }
     }
@@ -481,9 +479,9 @@ impl EncodeInto for Vec<bool> {
         } else {
             encoder.buf.reserve(MAX_SIZE_LEN + self.len());
             encoder.buf.put_u32_be(self.len() as u32);
-            for ele in self.into_iter() {
-                ele.encode_into(encoder)?;
-            }
+            encoder
+                .buf
+                .extend_from_slice(unsafe { mem::transmute(self.as_slice()) });
             Ok(())
         }
     }

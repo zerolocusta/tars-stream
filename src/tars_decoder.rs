@@ -1,7 +1,7 @@
+use bytes::{Buf, Bytes};
 use std::collections::BTreeMap;
 use std::io::Cursor;
-
-use bytes::{Buf, Bytes};
+use std::mem;
 
 use errors::DecodeErr;
 use tars_type::TarsTypeMark;
@@ -378,36 +378,21 @@ where
 
 impl DecodeFrom for Vec<u8> {
     fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
-        let mut v: Vec<u8> = vec![];
-        let mut decoder = TarsDecoder::new(&b);
-        while decoder.has_remaining() {
-            let ele = decoder.read::<u8>(TarsTypeMark::EnInt8.value())?;
-            v.push(ele)
-        }
+        let v: Vec<u8> = b.to_vec();
         Ok(v)
     }
 }
 
 impl DecodeFrom for Vec<i8> {
     fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
-        let mut v: Vec<i8> = vec![];
-        let mut decoder = TarsDecoder::new(&b);
-        while decoder.has_remaining() {
-            let ele = decoder.read::<i8>(TarsTypeMark::EnInt8.value())?;
-            v.push(ele)
-        }
+        let v: Vec<i8> = unsafe { mem::transmute(b.to_vec()) };
         Ok(v)
     }
 }
 
 impl DecodeFrom for Vec<bool> {
     fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
-        let mut v: Vec<bool> = vec![];
-        let mut decoder = TarsDecoder::new(&b);
-        while decoder.has_remaining() {
-            let ele = decoder.read::<bool>(TarsTypeMark::EnInt8.value())?;
-            v.push(ele)
-        }
+        let v: Vec<bool> = unsafe { mem::transmute(b.to_vec()) };
         Ok(v)
     }
 }
