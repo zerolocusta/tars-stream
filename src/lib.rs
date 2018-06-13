@@ -8,9 +8,14 @@ extern crate bytes;
 extern crate quick_error;
 
 pub mod errors;
+
+pub mod tars_type;
+
 pub mod tars_decoder;
 pub mod tars_encoder;
-pub mod tars_type;
+
+pub mod tup_decoder;
+pub mod tup_encoder;
 
 pub mod prelude {
     pub use errors::*;

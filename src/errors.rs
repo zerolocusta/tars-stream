@@ -13,6 +13,9 @@ quick_error!{
         WrongSimpleListTarsTypeErr {
             description("decoder: wrong simple list type")
         }
+        FieldNotFoundErr {
+            description("decoder: required field not found")
+        }
     }
 }
 

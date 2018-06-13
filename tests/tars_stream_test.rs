@@ -140,6 +140,7 @@ struct TestStruct2 {
     m: BTreeMap<String, String>, // 13
     y: Option<u8>,               // 14
     z: Option<TestStruct>,       // 15
+    x: Bytes,
 }
 
 impl TestStruct2 {
@@ -165,6 +166,7 @@ impl TestStruct2 {
             m: BTreeMap::new(),
             y: None,
             z: None,
+            x: Bytes::new(),
         }
     }
 }
@@ -192,6 +194,7 @@ impl DecodeFromTars for TestStruct2 {
         let m = de.get(13)?;
         let y = de.get(14)?;
         let z = de.get(15)?;
+        let x = de.get(16)?;
         Ok(TestStruct2 {
             f1,
             f2,
@@ -209,6 +212,7 @@ impl DecodeFromTars for TestStruct2 {
             m,
             y,
             z,
+            x,
         })
     }
 }
@@ -234,6 +238,7 @@ impl EncodeIntoTars for TestStruct2 {
         encoder.put(13, &self.m)?;
         encoder.put(14, &self.y)?;
         encoder.put(15, &self.z)?;
+        encoder.put(16, &self.x)?;
 
         Ok(())
     }
@@ -286,6 +291,7 @@ fn test_encode_decode_struct2() {
 
     ts.y = Some(random());
     ts.z = Some(TestStruct::random_for_test());
+    ts.x = Bytes::from(ts.s.v1.as_slice());
 
     let mut encoder = TarsEncoder::new();
 

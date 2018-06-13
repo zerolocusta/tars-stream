@@ -9,7 +9,7 @@ use tars_type::*;
 const MAX_HEADER_LEN: usize = 2;
 const MAX_SIZE_LEN: usize = 4;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct TarsEncoder {
     buf: BytesMut,
 }
@@ -292,6 +292,15 @@ impl TarsEncoderTrait<Vec<bool>> for TarsEncoder {
     }
 }
 
+impl TarsEncoderTrait<Bytes> for TarsEncoder {
+    fn put(&mut self, tag: u8, ele: &Bytes) -> Result<(), EncodeErr> {
+        self.put_head(tag, EnSimplelist)?;
+        self.put_head(0, EnInt8)?;
+        ele.encode_into(self)?;
+        Ok(())
+    }
+}
+
 impl<T> TarsEncoderTrait<Option<T>> for TarsEncoder
 where
     T: EncodeIntoTars,
@@ -482,6 +491,19 @@ impl EncodeIntoTars for Vec<bool> {
             encoder
                 .buf
                 .extend_from_slice(unsafe { mem::transmute(self.as_slice()) });
+            Ok(())
+        }
+    }
+}
+
+impl EncodeIntoTars for Bytes {
+    fn encode_into(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
+        if self.len() > u32::max_value() as usize {
+            Err(EncodeErr::BufferTooBigErr)
+        } else {
+            encoder.buf.reserve(MAX_SIZE_LEN + self.len());
+            encoder.buf.put_u32_be(self.len() as u32);
+            encoder.buf.extend_from_slice(self);
             Ok(())
         }
     }
@@ -785,6 +807,14 @@ mod tests {
         // (header len + string size + string in bytes)
         let expect_len = (1 + 4 + str4.len()) * times + (1 + 1 + str1.len()) * times;
         assert_eq!(len, expect_len as u32);
+    }
+
+    #[test]
+    fn test_encode_bytes() {
+        let b = Bytes::from(&b"hello world!"[..]);
+        let mut encoder = TarsEncoder::new();
+        encoder.put(9, &b).unwrap();
+        assert_eq!(&encoder.to_bytes(), &b"\x9d\x00\x00\x00\x00\x0chello world!"[..]);
     }
 
     #[test]

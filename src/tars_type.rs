@@ -21,3 +21,27 @@ impl TarsTypeMark {
         self as u8
     }
 }
+
+pub enum ProtocolVersion {
+    Tars = 1,
+    TupSimple = 2,
+    TupComplex = 3,
+}
+
+impl ProtocolVersion {
+    pub fn value(self) -> u8 {
+        self as u8
+    }
+}
+
+impl From<u8> for ProtocolVersion {
+    fn from(v: u8) -> Self {
+        if v == 1 {
+            ProtocolVersion::Tars
+        } else if v == 2 {
+            ProtocolVersion::TupSimple
+        } else {
+            ProtocolVersion::TupComplex
+        }
+    }
+}

@@ -20,7 +20,10 @@ pub struct Head {
 
 impl TarsDecoder {
     pub fn new() -> TarsDecoder {
-        TarsDecoder { buf: Bytes::new(), pos: 0 }
+        TarsDecoder {
+            buf: Bytes::new(),
+            pos: 0,
+        }
     }
 
     pub fn has_remaining(&self) -> bool {
@@ -353,9 +356,7 @@ impl DecodeFromTars for String {
 // from struct decoding
 impl DecodeFromTars for Bytes {
     fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
-        // clone will not copy [u8]
-        Ok(Bytes::from(&b[..]))
-        // b.clone()
+        Ok(b.clone())
     }
 }
 
@@ -855,5 +856,13 @@ mod tests {
         let b2: bool = de.get(1).unwrap();
         assert_eq!(b, false);
         assert_eq!(b2, true);
+    }
+
+    #[test]
+    fn test_decode_bytes() {
+        let d: [u8; 18] = *b"\x9d\x00\x00\x00\x00\x0chello world!";
+        let mut de = TarsDecoder::from(&d[..]);
+        let b: Bytes = de.get(9).unwrap();
+        assert_eq!(b, Bytes::from(&b"hello world!"[..]));
     }
 }
