@@ -19,10 +19,8 @@ pub struct Head {
 }
 
 impl TarsDecoder {
-    pub fn new(buf: &[u8]) -> TarsDecoder {
-        let mut b = Bytes::new();
-        b.extend_from_slice(buf);
-        TarsDecoder { buf: b, pos: 0 }
+    pub fn new() -> TarsDecoder {
+        TarsDecoder { buf: Bytes::new(), pos: 0 }
     }
 
     pub fn has_remaining(&self) -> bool {
@@ -171,6 +169,26 @@ impl TarsDecoder {
     }
 }
 
+impl<'a> From<&'a [u8]> for TarsDecoder {
+    fn from(buf: &'a [u8]) -> Self {
+        let b = Bytes::from(buf);
+        TarsDecoder { buf: b, pos: 0 }
+    }
+}
+
+impl<'a> From<&'a Bytes> for TarsDecoder {
+    fn from(buf: &'a Bytes) -> Self {
+        let b = buf.clone();
+        TarsDecoder { buf: b, pos: 0 }
+    }
+}
+
+impl From<Vec<u8>> for TarsDecoder {
+    fn from(buf: Vec<u8>) -> Self {
+        let b = Bytes::from(buf);
+        TarsDecoder { buf: b, pos: 0 }
+    }
+}
 pub trait TarsDecoderTrait<T> {
     fn get(&mut self, tag: u8) -> Result<T, DecodeErr>;
 }
@@ -348,7 +366,7 @@ where
 {
     fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
         let mut map = BTreeMap::new();
-        let mut decoder = TarsDecoder::new(&b);
+        let mut decoder = TarsDecoder::from(&b[..]);
         while decoder.has_remaining() {
             let key_head = decoder.take_head()?;
             let key = decoder.read::<K>(key_head.tars_type)?;
@@ -366,7 +384,7 @@ where
 {
     default fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
         let mut v = vec![];
-        let mut decoder = TarsDecoder::new(&b);
+        let mut decoder = TarsDecoder::from(b);
         while decoder.has_remaining() {
             let ele_type = decoder.take_head()?;
             let ele = decoder.read::<T>(ele_type.tars_type)?;
@@ -425,7 +443,7 @@ mod tests {
 
     impl DecodeFromTars for TestStruct2 {
         fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
-            let mut de = TarsDecoder::new(&b);
+            let mut de = TarsDecoder::from(b);
             let s = de.get(1)?;
             let s2 = de.get(3)?;
             let m = de.get(2)?;
@@ -437,7 +455,7 @@ mod tests {
 
     impl DecodeFromTars for TestStruct {
         fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
-            let mut de = TarsDecoder::new(&b);
+            let mut de = TarsDecoder::from(b);
             let a = de.get(0)?;
             let b = de.get(1)?;
             let v1 = de.get(2)?;
@@ -563,20 +581,20 @@ mod tests {
             6,
             7,
         ];
-        let mut de = TarsDecoder::new(&b);
+        let mut de = TarsDecoder::from(&b[..]);
         let list: Vec<u8> = de.read(TarsTypeMark::EnSimplelist.value()).unwrap();
         let result: Vec<u8> = vec![4, 5, 6, 7];
         assert_eq!(list, result);
 
         let b2: [u8; 6] = [0x0d, 0x00, 0x00, 0x00, 0x00, 0x00];
-        let mut de2 = TarsDecoder::new(&b2);
+        let mut de2 = TarsDecoder::from(&b2[..]);
         let v: Vec<u8> = de2.get(0).unwrap();
         assert_eq!(v, vec![]);
     }
 
     #[test]
     fn test_decode_zero() {
-        let mut de = TarsDecoder::new(&b""[..]);
+        let mut de = TarsDecoder::from(&b""[..]);
         let v0: u8 = de.read(TarsTypeMark::EnZero.value()).unwrap();
         let v1: u16 = de.read(TarsTypeMark::EnZero.value()).unwrap();
         let v2: u32 = de.read(TarsTypeMark::EnZero.value()).unwrap();
@@ -629,7 +647,7 @@ mod tests {
             b'l',
             b'd',
         ];
-        let mut de = TarsDecoder::new(&b[..]);
+        let mut de = TarsDecoder::from(&b[..]);
         let list: Vec<String> = de.read(TarsTypeMark::EnList.value()).unwrap();
         assert_eq!(list[0], String::from(&"foo bar"[..]));
         assert_eq!(list[1], String::from(&"hello world"[..]));
@@ -640,7 +658,7 @@ mod tests {
         );
 
         let b2: [u8; 5] = [0x99, 0, 0, 0, 0];
-        let mut de2 = TarsDecoder::new(&b2[..]);
+        let mut de2 = TarsDecoder::from(&b2[..]);
         let v2: Vec<BTreeMap<String, i32>> = de2.get(9).unwrap();
         assert_eq!(v2, vec![]);
     }
@@ -678,13 +696,13 @@ mod tests {
             b'l',
             b'd',
         ];
-        let mut de = TarsDecoder::new(&b[..]);
+        let mut de = TarsDecoder::from(&b[..]);
         let map: BTreeMap<String, String> = de.read(TarsTypeMark::EnMaps.value()).unwrap();
         let value2 = map.get(&String::from(&"foo bar"[..])).unwrap();
         assert_eq!(value2, &String::from(&"hello world"[..]));
 
         let b2: [u8; 5] = [0x48, 0, 0, 0, 0];
-        let mut de2 = TarsDecoder::new(&b2[..]);
+        let mut de2 = TarsDecoder::from(&b2[..]);
         let map2: BTreeMap<Vec<String>, BTreeMap<i32, String>> = de2.get(4).unwrap();
         assert_eq!(map2, BTreeMap::new());
     }
@@ -692,7 +710,7 @@ mod tests {
     #[test]
     fn test_take_int64() {
         let b: [u8; 8] = unsafe { mem::transmute(0x0acb8b9d9d9d9d9di64.to_be()) };
-        let mut de2 = TarsDecoder::new(&b[..]);
+        let mut de2 = TarsDecoder::from(&b[..]);
         let i: i64 = de2.read(TarsTypeMark::EnInt64.value()).unwrap();
         assert_eq!(i, 0x0acb8b9d9d9d9d9d);
     }
@@ -700,7 +718,7 @@ mod tests {
     #[test]
     fn test_take_int32() {
         let b: [u8; 4] = unsafe { mem::transmute(0x0acb8b9di32.to_be()) };
-        let mut de2 = TarsDecoder::new(&b[..]);
+        let mut de2 = TarsDecoder::from(&b[..]);
         let i: i32 = de2.read(TarsTypeMark::EnInt32.value()).unwrap();
         assert_eq!(i, 0x0acb8b9d);
     }
@@ -708,7 +726,7 @@ mod tests {
     #[test]
     fn test_decode_int16() {
         let b: [u8; 2] = unsafe { mem::transmute(0x0acbi16.to_be()) };
-        let mut de = TarsDecoder::new(&b[..]);
+        let mut de = TarsDecoder::from(&b[..]);
         assert_eq!(de.read(TarsTypeMark::EnInt16.value()), Ok(0x0acb as i16));
         assert_eq!(
             de.read::<i16>(TarsTypeMark::EnInt16.value()),
@@ -722,7 +740,7 @@ mod tests {
             v.push(head);
             v.push(42 + i);
         }
-        let mut de2 = TarsDecoder::new(&v);
+        let mut de2 = TarsDecoder::from(v);
 
         for i in 0..10 as u8 {
             assert_eq!(de2.get(i), Ok((42 + i) as u16));
@@ -740,7 +758,7 @@ mod tests {
             v2.push(value_arr[1]);
         }
 
-        let mut de3 = TarsDecoder::new(&v2);
+        let mut de3 = TarsDecoder::from(v2);
 
         for i in 0..10 as u8 {
             assert_eq!(de3.get(i), Ok(value));
@@ -751,7 +769,7 @@ mod tests {
     fn test_decode_int8() {
         let value: u8 = 1;
         let b: [u8; 10] = [value; 10];
-        let mut de = TarsDecoder::new(&b[..]);
+        let mut de = TarsDecoder::from(&b[..]);
         for _ in 0..10 {
             assert_eq!(de.read(TarsTypeMark::EnInt8.value()), Ok(value));
         }
@@ -760,7 +778,7 @@ mod tests {
 
         let value2: i8 = -1;
         let b2: [u8; 10] = [value2 as u8; 10];
-        let mut de2 = TarsDecoder::new(&b2[..]);
+        let mut de2 = TarsDecoder::from(&b2[..]);
         for _ in 0..10 {
             assert_eq!(de2.read(TarsTypeMark::EnInt8.value()), Ok(value2));
         }
@@ -777,7 +795,7 @@ mod tests {
             v.push(head);
             v.push(value3 as u8);
         }
-        let mut de3 = TarsDecoder::new(&v);
+        let mut de3 = TarsDecoder::from(v);
 
         for i in 0..10 as u8 {
             assert_eq!(de3.get(i), Ok(value3));
@@ -787,7 +805,7 @@ mod tests {
     #[test]
     fn test_decode_double() {
         let b2: [u8; 8] = unsafe { mem::transmute(0.633313f64.to_bits().to_be()) };
-        let mut de2 = TarsDecoder::new(&b2[..]);
+        let mut de2 = TarsDecoder::from(&b2[..]);
         let f: f64 = de2.read(TarsTypeMark::EnDouble.value()).unwrap();
         assert!(f == 0.633313f64);
     }
@@ -795,7 +813,7 @@ mod tests {
     #[test]
     fn test_decode_float() {
         let b2: [u8; 4] = unsafe { mem::transmute(0.35524f32.to_bits().to_be()) };
-        let mut de2 = TarsDecoder::new(&b2[..]);
+        let mut de2 = TarsDecoder::from(&b2[..]);
         let f: f32 = de2.read(TarsTypeMark::EnFloat.value()).unwrap();
         assert!(f == 0.35524f32);
     }
@@ -804,7 +822,7 @@ mod tests {
     fn test_decode_string() {
         // test read string1
         let d: [u8; 8] = [7, b'f', b'o', b'o', b' ', b'b', b'a', b'r'];
-        let mut de = TarsDecoder::new(&d);
+        let mut de = TarsDecoder::from(&d[..]);
         assert_eq!(
             de.read(TarsTypeMark::EnString1.value()),
             Ok(String::from(&"foo bar"[..]))
@@ -815,7 +833,7 @@ mod tests {
         let d2: [u8; 11] = [
             size[0], size[1], size[2], size[3], b'f', b'o', b'o', b' ', b'b', b'a', b'r',
         ];
-        let mut de2 = TarsDecoder::new(&d2);
+        let mut de2 = TarsDecoder::from(&d2[..]);
         assert_eq!(
             de2.read(TarsTypeMark::EnString4.value()),
             Ok(String::from(&"foo bar"[..]))
@@ -825,14 +843,14 @@ mod tests {
         let mut d3 = vec![];
         d3.push(0x07);
         d3.extend_from_slice(&d2);
-        let mut de3 = TarsDecoder::new(&d3);
+        let mut de3 = TarsDecoder::from(&d3[..]);
         assert_eq!(de3.get(0), Ok(String::from(&"foo bar"[..])));
     }
 
     #[test]
     fn test_decode_bool() {
         let d: [u8; 3] = [0x0c, 0x10, 0x01];
-        let mut de = TarsDecoder::new(&d);
+        let mut de = TarsDecoder::from(&d[..]);
         let b: bool = de.get(0).unwrap();
         let b2: bool = de.get(1).unwrap();
         assert_eq!(b, false);

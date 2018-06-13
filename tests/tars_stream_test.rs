@@ -10,8 +10,6 @@ use std::collections::BTreeMap;
 use tars_stream::prelude::*;
 use uuid::Uuid;
 
-// mod common;
-
 #[derive(Clone, Debug, PartialEq)]
 struct TestStruct {
     a: i8,             // tag 0
@@ -66,7 +64,7 @@ impl TestStruct {
 
 impl DecodeFromTars for TestStruct {
     fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
-        let mut de = TarsDecoder::new(&b);
+        let mut de = TarsDecoder::from(b);
         let a = de.get(0)?;
         let b = de.get(1)?;
         let v1 = de.get(2)?;
@@ -173,7 +171,7 @@ impl TestStruct2 {
 
 impl DecodeFromTars for TestStruct2 {
     fn decode_from(b: &Bytes) -> Result<Self, DecodeErr> {
-        let mut de = TarsDecoder::new(&b);
+        let mut de = TarsDecoder::from(b);
         let f1 = de.get(0)?;
         let f2 = de.get(1)?;
 
