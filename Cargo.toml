@@ -2,7 +2,7 @@
 name = "tars-stream"
 version = "0.0.2"
 authors = ["zerolocust <zerolocust@gmail.com>"]
-description = "for tars tup protocol decoding/encoding"
+description = "for tencent/Tars TARS Protocol encoding/decoding"
 homepage = "https://github.com/zerolocusta/tars-stream"
 repository = "https://github.com/zerolocusta/tars-stream"
 

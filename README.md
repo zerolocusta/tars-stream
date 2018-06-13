@@ -1,2 +1,2 @@
 # tars-stream
-for tars tup protocol decoding/encoding
+for tencent/Tars TARS Protocol encoding/decoding
