@@ -93,8 +93,8 @@ where
                 self.put_head(tag, EnInt32)?;
                 ele.encode_into_tars(self)?;
                 Ok(())
-            },
-            _ => Err(EncodeErr::UnknownTarsTypeErr)
+            }
+            _ => Err(EncodeErr::UnknownTarsTypeErr),
         }
     }
 }

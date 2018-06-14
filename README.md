@@ -5,7 +5,7 @@ for tencent/Tars TARS Protocol encoding/decoding
 |Tars Type|Rust Type|
 |---------|---------|
 |bool|bool|
-|byte|i8|
+|char|i8|
 |short|i16|
 |int|i32|
 |long|i64|
@@ -15,3 +15,6 @@ for tencent/Tars TARS Protocol encoding/decoding
 |unsigned byte|u8(兼容 tars::Short)|
 |unsigned short|u16(兼容 tars::Int32)|
 |unsigned int|u32(兼容 tars::Int64)|
+|vector\<char>|bytes::Bytes|
+|vector<T>|Vec<T>|
+|map<K, V>|BTreeMap<K, V>|

@@ -19,7 +19,7 @@ pub mod tup_encoder;
 
 pub mod prelude {
     pub use errors::*;
-    pub use tars_decoder::{DecodeFromTars, TarsDecoder, TarsDecoderTrait};
+    pub use tars_decoder::*;
     pub use tars_encoder::{EncodeIntoTars, TarsEncoder, TarsEncoderTrait};
     pub use tars_type::*;
 }

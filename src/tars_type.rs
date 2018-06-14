@@ -25,6 +25,28 @@ impl TarsTypeMark {
     }
 }
 
+impl From<u8> for TarsTypeMark {
+    fn from(v: u8) -> Self {
+        match v {
+            0 => TarsTypeMark::EnInt8,
+            1 => TarsTypeMark::EnInt16,
+            2 => TarsTypeMark::EnInt32,
+            3 => TarsTypeMark::EnInt64,
+            4 => TarsTypeMark::EnFloat,
+            5 => TarsTypeMark::EnDouble,
+            6 => TarsTypeMark::EnString1,
+            7 => TarsTypeMark::EnString4,
+            8 => TarsTypeMark::EnMaps,
+            9 => TarsTypeMark::EnList,
+            10 => TarsTypeMark::EnStructBegin,
+            11 => TarsTypeMark::EnStructEnd,
+            12 => TarsTypeMark::EnZero,
+            13 => TarsTypeMark::EnSimplelist,
+            _ => TarsTypeMark::EnZero, // unknown type, read nothing from buffer
+        }
+    }
+}
+
 pub enum ProtocolVersion {
     Tars = 1,
     TupSimple = 2,

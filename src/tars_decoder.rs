@@ -1,9 +1,10 @@
-use bytes::{Buf, Bytes};
+use bytes::{Buf, Bytes, IntoBuf};
 use std::collections::BTreeMap;
 use std::io::Cursor;
 use std::mem;
 
 use errors::DecodeErr;
+use tars_type::TarsTypeMark;
 use tars_type::TarsTypeMark::*;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -11,11 +12,11 @@ pub struct TarsDecoder {
     buf: Bytes,
     pos: usize,
 }
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug)]
 pub struct Head {
-    pub tag: u8,
-    pub tars_type: u8,
-    pub len: u8,
+    tag: u8,
+    tars_type: TarsTypeMark,
+    len: u8,
 }
 
 impl TarsDecoder {
@@ -26,108 +27,29 @@ impl TarsDecoder {
         }
     }
 
-    pub fn individual_decode<T>(buf: &Bytes) -> Result<T, DecodeErr>
-    where
-        T: DecodeFromTars,
-    {
-        let mut decoder = TarsDecoder::from(buf);
-        let head = decoder.take_head()?;
-        decoder.read(head.tars_type)
-    }
-
-    pub fn has_remaining(&self) -> bool {
-        self.pos < self.buf.len()
-    }
+    // pub fn individual_decode<T>(buf: &Bytes) -> Result<T, DecodeErr>
+    // where
+    //     T: DecodeFromTars,
+    // {
+    //     let mut decoder = TarsDecoder::from(buf);
+    //     let head = decoder.take_head()?;
+    //     decoder.read(head.tars_type)
+    // }
 
     fn remaining(&self) -> usize {
         self.buf.len() - self.pos
     }
 
-    fn reset_pos(&mut self) {
-        self.pos = 0;
+    fn has_remaining(&self) -> bool {
+        self.remaining() > 0
     }
 
-    // TODO: may not reset pos
-    fn skip_to_tag(&mut self, tag: u8) -> Result<Head, DecodeErr> {
-        self.reset_pos();
-        let mut result: Option<Head> = None;
-        while self.has_remaining() {
-            let head = self.take_head()?;
-            if head.tag == tag {
-                result = Some(head);
-                break;
-            } else {
-                let taked_size = self.take_size(head.tars_type)?;
-                self.pos += taked_size;
-            }
-        }
-        match result {
-            Some(h) => Ok(h),
-            None => Err(DecodeErr::NoEnoughDataErr),
-        }
-    }
-
-    pub fn read<T>(&mut self, tars_type: u8) -> Result<T, DecodeErr>
-    where
-        T: DecodeFromTars,
-    {
-        match tars_type {
-            _ if tars_type == TarsTypeMark::EnZero.value() => {
-                let b = Bytes::from(&b"\x00"[..]);
-                Ok(T::decode_from_tars(&b)?)
-            }
-            _ => {
-                let size = self.take_size(tars_type)?;
-                let value = self.take_then_advance(size)?;
-                Ok(T::decode_from_tars(&value)?)
-            }
-        }
-    }
-
-    pub fn take_head(&mut self) -> Result<Head, DecodeErr> {
-        if self.remaining() < 1 {
+    fn advance(&mut self, cnt: usize) -> Result<(), DecodeErr> {
+        if self.remaining() < cnt {
             Err(DecodeErr::NoEnoughDataErr)
         } else {
-            let mut cur = Cursor::new(&self.buf[self.pos..]);
-            let b = cur.get_u8();
-            let tars_type = b & 0x0f;
-            let mut tag = (b & 0xf0) >> 4;
-            let len = if tag < 15 {
-                1
-            } else {
-                tag = cur.get_u8();
-                2
-            };
-            self.pos += len as usize;
-            Ok(Head {
-                tag,
-                len,
-                tars_type,
-            })
-        }
-    }
-
-    fn take_size(&mut self, tars_type: u8) -> Result<usize, DecodeErr> {
-        match tars_type {
-            _ if tars_type == TarsTypeMark::EnInt8.value() => Ok(1),
-            _ if tars_type == TarsTypeMark::EnInt16.value() => Ok(2),
-            _ if tars_type == TarsTypeMark::EnInt32.value() => Ok(4),
-            _ if tars_type == TarsTypeMark::EnInt64.value() => Ok(8),
-            _ if tars_type == TarsTypeMark::EnFloat.value() => Ok(4),
-            _ if tars_type == TarsTypeMark::EnDouble.value() => Ok(8),
-            _ if tars_type == TarsTypeMark::EnString1.value()
-                || tars_type == TarsTypeMark::EnString4.value() =>
-            {
-                Ok(self.take_string_size(tars_type)?)
-            }
-            _ if tars_type == TarsTypeMark::EnMaps.value() => Ok(self.take_map_size()?),
-            _ if tars_type == TarsTypeMark::EnList.value() => Ok(self.take_list_size()?),
-            _ if tars_type == TarsTypeMark::EnStructBegin.value() => Ok(self.take_struct_size()?),
-            _ if tars_type == TarsTypeMark::EnZero.value() => Ok(0),
-            _ if tars_type == TarsTypeMark::EnSimplelist.value() => {
-                Ok(self.take_simple_list_size()?)
-            }
-            _ => Err(DecodeErr::UnknownTarsTypeErr),
+            self.pos += cnt;
+            Ok(())
         }
     }
 
@@ -141,55 +63,112 @@ impl TarsDecoder {
         }
     }
 
-    fn take_string_size(&mut self, tars_type: u8) -> Result<usize, DecodeErr> {
-        let mut cur = Cursor::new(&self.buf[self.pos..]);
-        if tars_type == TarsTypeMark::EnString1.value() {
-            let size = cur.get_u8() as usize;
-            self.pos += 1;
-            Ok(size as usize)
-        } else if tars_type == TarsTypeMark::EnString4.value() {
-            let size = cur.get_u32_be() as usize;
-            self.pos += 4;
-            Ok(size as usize)
-        } else {
-            Err(DecodeErr::UnknownTarsTypeErr)
+    fn skip_to_tag(&mut self, tag: u8) -> Result<Head, DecodeErr> {
+        let mut result: Option<Head> = None;
+        while self.has_remaining() {
+            let head = self.take_head()?;
+            if head.tag == tag {
+                result = Some(head);
+                break;
+            } else {
+                self.skip_field(head.tars_type)?;
+            }
+        }
+        match result {
+            Some(h) => Ok(h),
+            None => Err(DecodeErr::TagNotFoundErr),
         }
     }
 
-    fn take_map_size(&mut self) -> Result<usize, DecodeErr> {
-        Ok(self.read::<i32>(TarsTypeMark::EnInt32.value())? as usize)
+    fn take_head(&mut self) -> Result<Head, DecodeErr> {
+        if self.remaining() < 1 {
+            Err(DecodeErr::NoEnoughDataErr)
+        } else {
+            let mut buf = self.take_then_advance(1)?.into_buf();
+            let b = buf.get_u8();
+            let tars_type = b & 0x0f;
+            let mut tag = (b & 0xf0) >> 4;
+            let len = if tag < 15 {
+                1
+            } else {
+                let mut buf = self.take_then_advance(1)?.into_buf();
+                tag = buf.get_u8();
+                2
+            };
+            Ok(Head {
+                tag,
+                len,
+                tars_type: TarsTypeMark::from(tars_type),
+            })
+        }
     }
 
-    fn take_list_size(&mut self) -> Result<usize, DecodeErr> {
-        Ok(self.read::<i32>(TarsTypeMark::EnInt32.value())? as usize)
+    fn skip_field(&mut self, tars_type: TarsTypeMark) -> Result<(), DecodeErr> {
+        match tars_type {
+            EnInt8 => self.advance(1),
+            EnInt16 => self.advance(2),
+            EnInt32 => self.advance(4),
+            EnInt64 => self.advance(8),
+            EnFloat => self.advance(4),
+            EnDouble => self.advance(8),
+            EnString1 => self.skip_string1_field(),
+            EnString4 => self.skip_string4_field(),
+            EnMaps => self.skip_map_field(),
+            EnList => self.skip_list_field(),
+            EnStructBegin => self.skip_struct_field(),
+            EnStructEnd => Ok(()),
+            EnZero => Ok(()),
+            EnSimplelist => self.skip_simple_list_field(),
+        }
     }
 
-    fn take_simple_list_size(&mut self) -> Result<usize, DecodeErr> {
+    fn skip_string1_field(&mut self) -> Result<(), DecodeErr> {
+        let mut buf = self.take_then_advance(1)?.into_buf();
+        let size = buf.get_u8() as usize;
+        self.advance(size)
+    }
+
+    fn skip_string4_field(&mut self) -> Result<(), DecodeErr> {
+        let mut buf = self.take_then_advance(4)?.into_buf();
+        let size = buf.get_u32_be() as usize;
+        self.advance(size)
+    }
+
+    fn skip_map_field(&mut self) -> Result<(), DecodeErr> {
+        let ele_size = self.read_int32(0)? as usize;
+        for _ in 0..ele_size * 2 {
+            let head = self.take_head()?;
+            self.skip_field(head.tars_type)?;
+        }
+        Ok(())
+    }
+
+    fn skip_list_field(&mut self) -> Result<(), DecodeErr> {
+        let ele_size = self.read_int32(0)? as usize;
+        for _ in 0..ele_size {
+            let head = self.take_head()?;
+            self.skip_field(head.tars_type)?;
+        }
+        Ok(())
+    }
+
+    fn skip_simple_list_field(&mut self) -> Result<(), DecodeErr> {
         let head = self.take_head()?; // consume header (list type)
-        if head.tars_type == TarsTypeMark::EnInt8.value() {
-            Ok(self.read::<i32>(TarsTypeMark::EnInt32.value())? as usize)
-        } else {
-            Err(DecodeErr::WrongSimpleListTarsTypeErr)
-        }
+        self.skip_field(head.tars_type)
     }
 
-    fn take_struct_size(&mut self) -> Result<usize, DecodeErr> {
-        let before_pos = self.pos;
-        // 0x0B means (tag, type) => (0, EnStructEnd) => (0, 11)
+    fn skip_struct_field(&mut self) -> Result<(), DecodeErr> {
         let mut head = self.take_head()?;
-        while head.tars_type != TarsTypeMark::EnStructEnd.value() {
-            // 递归获取 struct 内部元素大小
-            let ele_size = self.take_size(head.tars_type).unwrap();
-            // 跳过元素内容
-            self.pos += ele_size;
-            // 获取下一个头部
-            head = self.take_head()?;
+        loop {
+            match head.tars_type {
+                EnStructEnd => break,
+                _ => {
+                    self.skip_field(head.tars_type)?;
+                    head = self.take_head()?;
+                }
+            }
         }
-        // 获取当前位置
-        let after_pos = self.pos;
-        // rollback to before_pos
-        self.pos = before_pos;
-        Ok((after_pos - before_pos) as usize)
+        Ok(())
     }
 }
 
@@ -213,156 +192,357 @@ impl From<Vec<u8>> for TarsDecoder {
         TarsDecoder { buf: b, pos: 0 }
     }
 }
-pub trait TarsDecoderTrait<T> {
-    fn readInt8(&mut self, tag: u8) -> Result<i8, DecodeErr>;
+
+pub trait TarsDecodeSimpleTrait {
+    fn read_int8(&mut self, tag: u8) -> Result<i8, DecodeErr>;
+    fn read_boolean(&mut self, tag: u8) -> Result<bool, DecodeErr>;
+    fn read_int16(&mut self, tag: u8) -> Result<i16, DecodeErr>;
+    fn read_int32(&mut self, tag: u8) -> Result<i32, DecodeErr>;
+    fn read_int64(&mut self, tag: u8) -> Result<i64, DecodeErr>;
+
+    fn read_uint8(&mut self, tag: u8) -> Result<u8, DecodeErr>;
+    fn read_uint16(&mut self, tag: u8) -> Result<u16, DecodeErr>;
+    fn read_uint32(&mut self, tag: u8) -> Result<u32, DecodeErr>;
+
+    fn read_float(&mut self, tag: u8) -> Result<f32, DecodeErr>;
+    fn read_double(&mut self, tag: u8) -> Result<f64, DecodeErr>;
+    fn read_string(&mut self, tag: u8) -> Result<String, DecodeErr>;
+
+    fn read_bytes(&mut self, tag: u8) -> Result<Bytes, DecodeErr>;
+}
+
+pub trait TarsDecodeListTrait<T>
+where
+    T: DecodeFromTars,
+{
+    fn read_list(&mut self, tag: u8) -> Result<Vec<T>, DecodeErr>;
+}
+
+pub trait TarsDecodeMapTrait<K, V>
+where
+    K: DecodeFromTars + Ord,
+    V: DecodeFromTars,
+{
+    fn read_map(&mut self, tag: u8) -> Result<BTreeMap<K, V>, DecodeErr>;
+}
+
+pub trait TarsDecodeStructTrait<T>
+where
+    T: DecodeFromTars,
+{
+    fn read_struct(&mut self, tag: u8) -> Result<T, DecodeErr>;
 }
 
 // for require field
-impl<T> TarsDecoderTrait<T> for TarsDecoder
-where
-    T: DecodeFromTars,
-{
-    fn readInt8(&mut self, tag: u8) -> Result<i8, DecodeErr> {
+impl TarsDecodeSimpleTrait for TarsDecoder {
+    fn read_int8(&mut self, tag: u8) -> Result<i8, DecodeErr> {
         let head = self.skip_to_tag(tag)?;
-        if head.tars_type == EnInt8.value() {
-            let mut cur = Cursor::new(b);
-            Ok(cur.get_i8())
-        } else {
-            Err(DecodeErr::MisMatchTarsTypeErr)
+        match head.tars_type {
+            EnZero => Ok(0),
+            EnInt8 => {
+                let mut buf = self.take_then_advance(1)?.into_buf();
+                Ok(buf.get_i8())
+            }
+            _ => Err(DecodeErr::MisMatchTarsTypeErr),
+        }
+    }
+
+    fn read_boolean(&mut self, tag: u8) -> Result<bool, DecodeErr> {
+        self.read_int8(tag).map(|i| i != 0)
+    }
+
+    fn read_int16(&mut self, tag: u8) -> Result<i16, DecodeErr> {
+        let head = self.skip_to_tag(tag)?;
+        match head.tars_type {
+            EnZero => Ok(0),
+            EnInt8 => {
+                let mut buf = self.take_then_advance(1)?.into_buf();
+                Ok(i16::from(buf.get_i8()))
+            }
+            EnInt16 => {
+                let mut buf = self.take_then_advance(2)?.into_buf();
+                Ok(buf.get_i16_be())
+            }
+            _ => Err(DecodeErr::MisMatchTarsTypeErr),
+        }
+    }
+
+    fn read_int32(&mut self, tag: u8) -> Result<i32, DecodeErr> {
+        let head = self.skip_to_tag(tag)?;
+        match head.tars_type {
+            EnZero => Ok(0),
+            EnInt8 => {
+                let mut buf = self.take_then_advance(1)?.into_buf();
+                Ok(i32::from(buf.get_i8()))
+            }
+            EnInt16 => {
+                let mut buf = self.take_then_advance(2)?.into_buf();
+                Ok(i32::from(buf.get_i16_be()))
+            }
+            EnInt32 => {
+                let mut buf = self.take_then_advance(4)?.into_buf();
+                Ok(buf.get_i32_be())
+            }
+            _ => Err(DecodeErr::MisMatchTarsTypeErr),
+        }
+    }
+
+    fn read_int64(&mut self, tag: u8) -> Result<i64, DecodeErr> {
+        let head = self.skip_to_tag(tag)?;
+        match head.tars_type {
+            EnZero => Ok(0),
+            EnInt8 => {
+                let mut buf = self.take_then_advance(1)?.into_buf();
+                Ok(i64::from(buf.get_i8()))
+            }
+            EnInt16 => {
+                let mut buf = self.take_then_advance(2)?.into_buf();
+                Ok(i64::from(buf.get_i16_be()))
+            }
+            EnInt32 => {
+                let mut buf = self.take_then_advance(4)?.into_buf();
+                Ok(i64::from(buf.get_i32_be()))
+            }
+            EnInt64 => {
+                let mut buf = self.take_then_advance(8)?.into_buf();
+                Ok(buf.get_i64_be())
+            }
+            _ => Err(DecodeErr::MisMatchTarsTypeErr),
+        }
+    }
+
+    fn read_uint8(&mut self, tag: u8) -> Result<u8, DecodeErr> {
+        self.read_int16(tag).map(|i| i as u8)
+    }
+
+    fn read_uint16(&mut self, tag: u8) -> Result<u16, DecodeErr> {
+        self.read_int32(tag).map(|i| i as u16)
+    }
+
+    fn read_uint32(&mut self, tag: u8) -> Result<u32, DecodeErr> {
+        self.read_int64(tag).map(|i| i as u32)
+    }
+
+    fn read_float(&mut self, tag: u8) -> Result<f32, DecodeErr> {
+        let head = self.skip_to_tag(tag)?;
+        match head.tars_type {
+            EnZero => Ok(0.0),
+            EnFloat => {
+                let mut buf = self.take_then_advance(4)?.into_buf();
+                Ok(buf.get_f32_be())
+            }
+            _ => Err(DecodeErr::MisMatchTarsTypeErr),
+        }
+    }
+
+    fn read_double(&mut self, tag: u8) -> Result<f64, DecodeErr> {
+        let head = self.skip_to_tag(tag)?;
+        match head.tars_type {
+            EnZero => Ok(0.0),
+            EnDouble => {
+                let mut buf = self.take_then_advance(8)?.into_buf();
+                Ok(buf.get_f64_be())
+            }
+            _ => Err(DecodeErr::MisMatchTarsTypeErr),
+        }
+    }
+
+    fn read_string(&mut self, tag: u8) -> Result<String, DecodeErr> {
+        let head = self.skip_to_tag(tag)?;
+        match head.tars_type {
+            EnString1 => {
+                let mut size_buf = self.take_then_advance(1)?.into_buf();
+                let size = size_buf.get_u8() as usize;
+                let field_buf = self.take_then_advance(size)?.into_buf();
+                let cow = String::from_utf8_lossy(field_buf.bytes());
+                Ok(String::from(cow))
+            }
+            EnString4 => {
+                let mut size_buf = self.take_then_advance(4)?.into_buf();
+                let size = size_buf.get_u32_be() as usize;
+                let field_buf = self.take_then_advance(size)?.into_buf();
+                let cow = String::from_utf8_lossy(field_buf.bytes());
+                Ok(String::from(cow))
+            }
+            _ => Err(DecodeErr::MisMatchTarsTypeErr),
+        }
+    }
+
+    fn read_bytes(&mut self, tag: u8) -> Result<Bytes, DecodeErr> {
+        // Bytes 实为 vector<char>, 以 simple list 表示
+        let head = self.skip_to_tag(tag)?;
+        match head.tars_type {
+            EnSimplelist => {
+                let head = self.take_head()?;
+                match head.tars_type {
+                    EnInt8 => {
+                        let size = self.read_int32(0)? as usize;
+                        self.take_then_advance(size)
+                    }
+                    _ => Err(DecodeErr::WrongSimpleListTarsTypeErr),
+                }
+            }
+            _ => Err(DecodeErr::MisMatchTarsTypeErr),
         }
     }
 }
 
-// for optional field
-impl<T> TarsDecoderTrait<Option<T>> for TarsDecoder
+impl<T> TarsDecodeListTrait<T> for TarsDecoder
 where
     T: DecodeFromTars,
 {
-    fn get(&mut self, tag: u8) -> Result<Option<T>, DecodeErr> {
-        self.pos = 0;
-        if let Ok(head) = self.skip_to_tag(tag) {
-            Ok(Some(self.read::<T>(head.tars_type)?))
-        } else {
-            Ok(None)
+    default fn read_list(&mut self, tag: u8) -> Result<Vec<T>, DecodeErr> {
+        let head = self.skip_to_tag(tag)?;
+        match head.tars_type {
+            EnList => {
+                let size = self.read_int32(0)? as usize;
+                let mut v = vec![];
+                for _ in 0..size {
+                    let ele = T::decode_from_tars(self, 0)?;
+                    v.push(ele);
+                }
+                Ok(v)
+            }
+            _ => Err(DecodeErr::MisMatchTarsTypeErr),
         }
     }
 }
+
+impl TarsDecodeListTrait<i8> for TarsDecoder {
+    fn read_list(&mut self, tag: u8) -> Result<Vec<i8>, DecodeErr> {
+        self.read_bytes(tag)
+            .map(|v| unsafe { mem::transmute(v.to_vec()) })
+    }
+}
+
+impl TarsDecodeListTrait<bool> for TarsDecoder {
+    fn read_list(&mut self, tag: u8) -> Result<Vec<bool>, DecodeErr> {
+        self.read_bytes(tag)
+            .map(|v| unsafe { mem::transmute(v.to_vec()) })
+    }
+}
+
+impl<K, V> TarsDecodeMapTrait<K, V> for TarsDecoder
+where
+    K: DecodeFromTars + Ord,
+    V: DecodeFromTars,
+{
+    fn read_map(&mut self, tag: u8) -> Result<BTreeMap<K, V>, DecodeErr> {
+        let head = self.skip_to_tag(tag)?;
+        match head.tars_type {
+            EnMaps => {
+                let mut size_buf = self.take_then_advance(4)?.into_buf();
+                let size = size_buf.get_u32_be() as usize;
+                let mut m = BTreeMap::new();
+                for _ in 0..size {
+                    let key = K::decode_from_tars(self, 0)?;
+                    let value = V::decode_from_tars(self, 0)?;
+                    m.insert(key, value);
+                }
+                Ok(m)
+            }
+            _ => Err(DecodeErr::MisMatchTarsTypeErr),
+        }
+    }
+}
+
+impl<T> TarsDecodeStructTrait<T> for TarsDecoder
+where
+    T: DecodeFromTars,
+{
+    fn read_struct(&mut self, tag: u8) -> Result<T, DecodeErr> {
+        let head = self.skip_to_tag(tag)?;
+        match head.tars_type {
+            EnStructBegin => T::decode_from_tars(self, 0),
+            _ => Err(DecodeErr::MisMatchTarsTypeErr),
+        }
+    }
+}
+
+// // for optional field
+// impl<T> TarsDecoderTrait<Option<T>> for TarsDecoder
+// where
+//     T: DecodeFromTars,
+// {
+//     fn get(&mut self, tag: u8) -> Result<Option<T>, DecodeErr> {
+//         self.pos = 0;
+//         if let Ok(head) = self.skip_to_tag(tag) {
+//             Ok(Some(self.read::<T>(head.tars_type)?))
+//         } else {
+//             Ok(None)
+//         }
+//     }
+// }
 
 pub trait DecodeFromTars {
-    fn decode_from_tars(&Bytes) -> Result<Self, DecodeErr>
+    fn decode_from_tars(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr>
     where
         Self: Sized;
 }
 
 impl DecodeFromTars for i8 {
-    // 对应 tars::Char, 1 字节
-    fn decode_from_tars(b: &Bytes) -> Result<Self, DecodeErr> {
-        let mut cur = Cursor::new(b);
-        Ok(cur.get_i8())
+    fn decode_from_tars(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
+        decoder.read_int8(tag)
     }
 }
 
 impl DecodeFromTars for bool {
-    fn decode_from_tars(b: &Bytes) -> Result<Self, DecodeErr> {
-        let v = i8::decode_from_tars(b)?;
-        Ok(v != 0)
+    fn decode_from_tars(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
+        decoder.read_boolean(tag)
     }
 }
 
 impl DecodeFromTars for i16 {
-    // 对应 tars::Short, 2 字节
-    fn decode_from_tars(b: &Bytes) -> Result<Self, DecodeErr> {
-        let mut cur = Cursor::new(b);
-        if b.len() == 1 {
-            Ok(i16::from(cur.get_i8()))
-        } else {
-            Ok(cur.get_i16_be())
-        }
+    fn decode_from_tars(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
+        decoder.read_int16(tag)
     }
 }
 
 impl DecodeFromTars for i32 {
-    // 对应 tars::Int32, 最大 4 字节
-    fn decode_from_tars(b: &Bytes) -> Result<Self, DecodeErr> {
-        let mut cur = Cursor::new(b);
-        if b.len() == 1 {
-            Ok(i32::from(cur.get_i8()))
-        } else if b.len() == 2 {
-            Ok(i32::from(cur.get_i16_be()))
-        } else {
-            Ok(cur.get_i32_be())
-        }
+    fn decode_from_tars(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
+        decoder.read_int32(tag)
     }
 }
 
 impl DecodeFromTars for i64 {
-    // 对应 tars::Int64, 最大 8 字节
-    fn decode_from_tars(b: &Bytes) -> Result<Self, DecodeErr> {
-        let mut cur = Cursor::new(b);
-        if b.len() == 1 {
-            Ok(i64::from(cur.get_i8()))
-        } else if b.len() == 2 {
-            Ok(i64::from(cur.get_i16_be()))
-        } else if b.len() == 4 {
-            Ok(i64::from(cur.get_i32_be()))
-        } else {
-            Ok(cur.get_i64_be())
-        }
+    fn decode_from_tars(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
+        decoder.read_int64(tag)
     }
 }
 
 impl DecodeFromTars for u8 {
-    fn decode_from_tars(b: &Bytes) -> Result<Self, DecodeErr> {
-        Ok(i16::decode_from_tars(b)? as u8)
+    fn decode_from_tars(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
+        decoder.read_uint8(tag)
     }
 }
 
 impl DecodeFromTars for u16 {
-    fn decode_from_tars(b: &Bytes) -> Result<Self, DecodeErr> {
-        Ok(i32::decode_from_tars(b)? as u16)
+    fn decode_from_tars(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
+        decoder.read_uint16(tag)
     }
 }
 
 impl DecodeFromTars for u32 {
-    fn decode_from_tars(b: &Bytes) -> Result<Self, DecodeErr> {
-        Ok(i64::decode_from_tars(b)? as u32)
+    fn decode_from_tars(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
+        decoder.read_uint32(tag)
     }
 }
 
 impl DecodeFromTars for f32 {
-    fn decode_from_tars(b: &Bytes) -> Result<Self, DecodeErr> {
-        if b.len() == 1 {
-            Ok(0.0)
-        } else {
-            let mut cur = Cursor::new(b);
-            Ok(cur.get_f32_be())
-        }
+    fn decode_from_tars(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
+        decoder.read_float(tag)
     }
 }
 
 impl DecodeFromTars for f64 {
-    fn decode_from_tars(b: &Bytes) -> Result<Self, DecodeErr> {
-        if b.len() == 1 {
-            Ok(0.0)
-        } else {
-            let mut cur = Cursor::new(b);
-            Ok(cur.get_f64_be())
-        }
+    fn decode_from_tars(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
+        decoder.read_double(tag)
     }
 }
 
 impl DecodeFromTars for String {
-    fn decode_from_tars(b: &Bytes) -> Result<Self, DecodeErr> {
-        // handle invalid utf8 character
-        let cow = String::from_utf8_lossy(&b);
-        Ok(String::from(cow))
-    }
-}
-
-// from struct decoding
-impl DecodeFromTars for Bytes {
-    fn decode_from_tars(b: &Bytes) -> Result<Self, DecodeErr> {
-        Ok(b.clone())
+    fn decode_from_tars(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
+        decoder.read_string(tag)
     }
 }
 
@@ -371,17 +551,8 @@ where
     K: DecodeFromTars + Ord,
     V: DecodeFromTars,
 {
-    fn decode_from_tars(b: &Bytes) -> Result<Self, DecodeErr> {
-        let mut map = BTreeMap::new();
-        let mut decoder = TarsDecoder::from(&b[..]);
-        while decoder.has_remaining() {
-            let key_head = decoder.take_head()?;
-            let key = decoder.read::<K>(key_head.tars_type)?;
-            let value_head = decoder.take_head()?;
-            let value = decoder.read::<V>(value_head.tars_type)?;
-            map.insert(key, value);
-        }
-        Ok(map)
+    fn decode_from_tars(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
+        decoder.read_map(tag)
     }
 }
 
@@ -389,90 +560,75 @@ impl<T> DecodeFromTars for Vec<T>
 where
     T: DecodeFromTars,
 {
-    default fn decode_from_tars(b: &Bytes) -> Result<Self, DecodeErr> {
-        let mut v = vec![];
-        let mut decoder = TarsDecoder::from(b);
-        while decoder.has_remaining() {
-            let ele_type = decoder.take_head()?;
-            let ele = decoder.read::<T>(ele_type.tars_type)?;
-            v.push(ele);
-        }
-        Ok(v)
+    fn decode_from_tars(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
+        decoder.read_list(tag)
     }
 }
 
-impl DecodeFromTars for Vec<i8> {
-    fn decode_from_tars(b: &Bytes) -> Result<Self, DecodeErr> {
-        let v: Vec<i8> = unsafe { mem::transmute(b.to_vec()) };
-        Ok(v)
-    }
-}
-
-impl DecodeFromTars for Vec<bool> {
-    fn decode_from_tars(b: &Bytes) -> Result<Self, DecodeErr> {
-        let v: Vec<bool> = unsafe { mem::transmute(b.to_vec()) };
-        Ok(v)
+impl DecodeFromTars for Bytes {
+    fn decode_from_tars(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
+        decoder.read_bytes(tag)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{DecodeFromTars, TarsDecoder, TarsDecoderTrait};
+    use super::*;
     use bytes::Bytes;
     use errors::DecodeErr;
     use std::collections::BTreeMap;
     use std::mem;
     use tars_type::TarsTypeMark;
+    use tars_type::TarsTypeMark::*;
 
     #[test]
     fn test_take_simple_list() {
         let head: [u8; 4] = unsafe { mem::transmute(4u32.to_be()) };
-        let b: [u8; 9] = [
-            0x00, // {tag: 0, type: 0}
-            head[0],
-            head[1],
-            head[2],
-            head[3],
-            4,
-            5,
-            6,
-            7,
-        ];
+        let b: [u8; 11] = [0x7d, 0x00, 0x02, head[0], head[1], head[2], head[3], 4, 5, 6, 7];
         let mut de = TarsDecoder::from(&b[..]);
-        let list: Vec<i8> = de.read(TarsTypeMark::EnSimplelist.value()).unwrap();
+        let list: Vec<i8> = de.read_list(7).unwrap();
         let result: Vec<i8> = vec![4, 5, 6, 7];
         assert_eq!(list, result);
 
-        let b2: [u8; 6] = [0x0d, 0x00, 0x00, 0x00, 0x00, 0x00];
+        let b2: [u8; 11] = [0xed, 0x00, 0x02, head[0], head[1], head[2], head[3], 1, 0, 1, 0];
         let mut de2 = TarsDecoder::from(&b2[..]);
-        let v: Vec<u8> = de2.get(0).unwrap();
-        assert_eq!(v, vec![]);
+        let list: Vec<bool> = de2.read_list(14).unwrap();
+        let result: Vec<bool> = vec![true, false, true, false];
+        assert_eq!(list, result);
     }
 
     #[test]
     fn test_decode_zero() {
-        let mut de = TarsDecoder::from(&b""[..]);
-        let v0: u8 = de.read(TarsTypeMark::EnZero.value()).unwrap();
-        let v1: u16 = de.read(TarsTypeMark::EnZero.value()).unwrap();
-        let v2: u32 = de.read(TarsTypeMark::EnZero.value()).unwrap();
-        let v4: i8 = de.read(TarsTypeMark::EnZero.value()).unwrap();
-        let v5: i16 = de.read(TarsTypeMark::EnZero.value()).unwrap();
-        let v6: i32 = de.read(TarsTypeMark::EnZero.value()).unwrap();
-        let v7: i64 = de.read(TarsTypeMark::EnZero.value()).unwrap();
+        let mut de = TarsDecoder::from(&b"\x0c\x1c\x2c\x3c\x4c\x5c\xfc\xff\x9c\xac\xec"[..]);
+        let v0: u8 = de.read_uint8(0).unwrap();
+        let v1: u16 = de.read_uint16(1).unwrap();
+        let v2: u32 = de.read_uint32(2).unwrap();
+        let v3: i8 = de.read_int8(3).unwrap();
+        let v4: i16 = de.read_int16(4).unwrap();
+        let v5: i32 = de.read_int32(5).unwrap();
+        let v6: i64 = de.read_int64(255).unwrap();
+        let v7: f32 = de.read_float(9).unwrap();
+        let v8: f64 = de.read_double(10).unwrap();
+        let v9: bool = de.read_boolean(14).unwrap();
 
         assert_eq!(v0, 0);
         assert_eq!(v1, 0);
         assert_eq!(v2, 0);
+        assert_eq!(v3, 0);
         assert_eq!(v4, 0);
         assert_eq!(v5, 0);
         assert_eq!(v6, 0);
-        assert_eq!(v7, 0);
+        assert_eq!(v7, 0.0);
+        assert_eq!(v8, 0.0);
+        assert_eq!(v9, false);
     }
 
     #[test]
     fn test_decode_list() {
-        let size: [u8; 4] = unsafe { mem::transmute(22u32.to_be()) };
-        let b: [u8; 26] = [
+        let size: [u8; 4] = unsafe { mem::transmute(2u32.to_be()) };
+        let b: [u8; 28] = [
+            0xa9,
+            0x02,
             size[0],
             size[1],
             size[2],
@@ -503,220 +659,218 @@ mod tests {
             b'd',
         ];
         let mut de = TarsDecoder::from(&b[..]);
-        let list: Vec<String> = de.read(TarsTypeMark::EnList.value()).unwrap();
+        let list: Vec<String> = de.read_list(10).unwrap();
+        println!("{:?}", list);
         assert_eq!(list[0], String::from(&"foo bar"[..]));
         assert_eq!(list[1], String::from(&"hello world"[..]));
 
         assert_eq!(
-            de.read::<Vec<String>>(TarsTypeMark::EnList.value()),
-            Err(DecodeErr::NoEnoughDataErr)
+            de.read_list(10) as Result<Vec<String>, DecodeErr>,
+            Err(DecodeErr::TagNotFoundErr)
         );
 
-        let b2: [u8; 5] = [0x99, 0, 0, 0, 0];
+        let b2: [u8; 6] = [0x99, 0x02, 0, 0, 0, 0];
         let mut de2 = TarsDecoder::from(&b2[..]);
-        let v2: Vec<BTreeMap<String, i32>> = de2.get(9).unwrap();
+        let v2: Vec<BTreeMap<String, i32>> = de2.read_list(9).unwrap();
         assert_eq!(v2, vec![]);
     }
 
-    #[test]
-    fn test_take_map() {
-        let size: [u8; 4] = unsafe { mem::transmute(22u32.to_be()) };
-        let b: [u8; 26] = [
-            size[0],
-            size[1],
-            size[2],
-            size[3],
-            // {tag: 0, type: 6}
-            0x06,
-            7,
-            b'f',
-            b'o',
-            b'o',
-            b' ',
-            b'b',
-            b'a',
-            b'r',
-            // {tag: 0, type: 6}
-            0x06,
-            11,
-            b'h',
-            b'e',
-            b'l',
-            b'l',
-            b'o',
-            b' ',
-            b'w',
-            b'o',
-            b'r',
-            b'l',
-            b'd',
-        ];
-        let mut de = TarsDecoder::from(&b[..]);
-        let map: BTreeMap<String, String> = de.read(TarsTypeMark::EnMaps.value()).unwrap();
-        let value2 = map.get(&String::from(&"foo bar"[..])).unwrap();
-        assert_eq!(value2, &String::from(&"hello world"[..]));
+    // #[test]
+    // fn test_take_map() {
+    //     let size: [u8; 4] = unsafe { mem::transmute(22u32.to_be()) };
+    //     let b: [u8; 26] = [
+    //         size[0],
+    //         size[1],
+    //         size[2],
+    //         size[3],
+    //         // {tag: 0, type: 6}
+    //         0x06,
+    //         7,
+    //         b'f',
+    //         b'o',
+    //         b'o',
+    //         b' ',
+    //         b'b',
+    //         b'a',
+    //         b'r',
+    //         // {tag: 0, type: 6}
+    //         0x06,
+    //         11,
+    //         b'h',
+    //         b'e',
+    //         b'l',
+    //         b'l',
+    //         b'o',
+    //         b' ',
+    //         b'w',
+    //         b'o',
+    //         b'r',
+    //         b'l',
+    //         b'd',
+    //     ];
+    //     let mut de = TarsDecoder::from(&b[..]);
+    //     let map: BTreeMap<String, String> = de.read(TarsTypeMark::EnMaps.value()).unwrap();
+    //     let value2 = map.get(&String::from(&"foo bar"[..])).unwrap();
+    //     assert_eq!(value2, &String::from(&"hello world"[..]));
 
-        let b2: [u8; 5] = [0x48, 0, 0, 0, 0];
-        let mut de2 = TarsDecoder::from(&b2[..]);
-        let map2: BTreeMap<Vec<String>, BTreeMap<i32, String>> = de2.get(4).unwrap();
-        assert_eq!(map2, BTreeMap::new());
-    }
+    //     let b2: [u8; 5] = [0x48, 0, 0, 0, 0];
+    //     let mut de2 = TarsDecoder::from(&b2[..]);
+    //     let map2: BTreeMap<Vec<String>, BTreeMap<i32, String>> = de2.get(4).unwrap();
+    //     assert_eq!(map2, BTreeMap::new());
+    // }
 
-    #[test]
-    fn test_take_int64() {
-        let b: [u8; 8] = unsafe { mem::transmute(0x0acb8b9d9d9d9d9di64.to_be()) };
-        let mut de2 = TarsDecoder::from(&b[..]);
-        let i: i64 = de2.read(TarsTypeMark::EnInt64.value()).unwrap();
-        assert_eq!(i, 0x0acb8b9d9d9d9d9d);
-    }
+    // #[test]
+    // fn test_take_int64() {
+    //     let b: [u8; 8] = unsafe { mem::transmute(0x0acb8b9d9d9d9d9di64.to_be()) };
+    //     let mut de2 = TarsDecoder::from(&b[..]);
+    //     let i: i64 = de2.read(TarsTypeMark::EnInt64.value()).unwrap();
+    //     assert_eq!(i, 0x0acb8b9d9d9d9d9d);
+    // }
 
-    #[test]
-    fn test_take_int32() {
-        let b: [u8; 4] = unsafe { mem::transmute(0x0acb8b9di32.to_be()) };
-        let mut de2 = TarsDecoder::from(&b[..]);
-        let i: i32 = de2.read(TarsTypeMark::EnInt32.value()).unwrap();
-        assert_eq!(i, 0x0acb8b9d);
-    }
+    // #[test]
+    // fn test_take_int32() {
+    //     let b: [u8; 4] = unsafe { mem::transmute(0x0acb8b9di32.to_be()) };
+    //     let mut de2 = TarsDecoder::from(&b[..]);
+    //     let i: i32 = de2.read(TarsTypeMark::EnInt32.value()).unwrap();
+    //     assert_eq!(i, 0x0acb8b9d);
+    // }
 
-    #[test]
-    fn test_decode_int16() {
-        let b: [u8; 2] = unsafe { mem::transmute(0x0acbi16.to_be()) };
-        let mut de = TarsDecoder::from(&b[..]);
-        assert_eq!(de.read(TarsTypeMark::EnInt16.value()), Ok(0x0acb as i16));
-        assert_eq!(
-            de.read::<i16>(TarsTypeMark::EnInt16.value()),
-            Err(DecodeErr::NoEnoughDataErr)
-        );
+    // #[test]
+    // fn test_decode_int16() {
+    //     let b: [u8; 2] = unsafe { mem::transmute(0x0acbi16.to_be()) };
+    //     let mut de = TarsDecoder::from(&b[..]);
+    //     assert_eq!(de.read(TarsTypeMark::EnInt16.value()), Ok(0x0acb as i16));
+    //     assert_eq!(
+    //         de.read::<i16>(TarsTypeMark::EnInt16.value()),
+    //         Err(DecodeErr::NoEnoughDataErr)
+    //     );
 
-        // test int compress read u16 from u8
-        let mut v = vec![];
-        for i in 0..10 as u8 {
-            let head = (i << 4) | TarsTypeMark::EnInt8.value();
-            v.push(head);
-            v.push(42 + i);
-        }
-        let mut de2 = TarsDecoder::from(v);
+    //     // test int compress read u16 from u8
+    //     let mut v = vec![];
+    //     for i in 0..10 as u8 {
+    //         let head = (i << 4) | TarsTypeMark::EnInt8.value();
+    //         v.push(head);
+    //         v.push(42 + i);
+    //     }
+    //     let mut de2 = TarsDecoder::from(v);
 
-        for i in 0..10 as u8 {
-            assert_eq!(de2.get(i), Ok((42 + i) as u16));
-        }
+    //     for i in 0..10 as u8 {
+    //         assert_eq!(de2.get(i), Ok((42 + i) as u16));
+    //     }
 
-        // test get i16
-        let mut v2 = vec![];
-        let value = -42i16;
-        let value_arr: [u8; 2] = unsafe { mem::transmute(value.to_be()) };
+    //     // test get i16
+    //     let mut v2 = vec![];
+    //     let value = -42i16;
+    //     let value_arr: [u8; 2] = unsafe { mem::transmute(value.to_be()) };
 
-        for i in 0..10 as u8 {
-            let head = (i << 4) | TarsTypeMark::EnInt16.value();
-            v2.push(head);
-            v2.push(value_arr[0]);
-            v2.push(value_arr[1]);
-        }
+    //     for i in 0..10 as u8 {
+    //         let head = (i << 4) | TarsTypeMark::EnInt16.value();
+    //         v2.push(head);
+    //         v2.push(value_arr[0]);
+    //         v2.push(value_arr[1]);
+    //     }
 
-        let mut de3 = TarsDecoder::from(v2);
+    //     let mut de3 = TarsDecoder::from(v2);
 
-        for i in 0..10 as u8 {
-            assert_eq!(de3.get(i), Ok(value));
-        }
-    }
+    //     for i in 0..10 as u8 {
+    //         assert_eq!(de3.get(i), Ok(value));
+    //     }
+    // }
 
-    #[test]
-    fn test_decode_int8() {
-        let value: u8 = 1;
-        let b: [u8; 10] = [value; 10];
-        let mut de = TarsDecoder::from(&b[..]);
-        for _ in 0..10 {
-            assert_eq!(de.read(TarsTypeMark::EnInt8.value()), Ok(value));
-        }
+    // #[test]
+    // fn test_decode_int8() {
+    //     let value: u8 = 1;
+    //     let b: [u8; 10] = [value; 10];
+    //     let mut de = TarsDecoder::from(&b[..]);
+    //     for _ in 0..10 {
+    //         assert_eq!(de.read(TarsTypeMark::EnInt8.value()), Ok(value));
+    //     }
 
-        assert_eq!(de.read::<u8>(0), Err(DecodeErr::NoEnoughDataErr));
+    //     assert_eq!(de.read::<u8>(0), Err(DecodeErr::NoEnoughDataErr));
 
-        let value2: i8 = -1;
-        let b2: [u8; 10] = [value2 as u8; 10];
-        let mut de2 = TarsDecoder::from(&b2[..]);
-        for _ in 0..10 {
-            assert_eq!(de2.read(TarsTypeMark::EnInt8.value()), Ok(value2));
-        }
+    //     let value2: i8 = -1;
+    //     let b2: [u8; 10] = [value2 as u8; 10];
+    //     let mut de2 = TarsDecoder::from(&b2[..]);
+    //     for _ in 0..10 {
+    //         assert_eq!(de2.read(TarsTypeMark::EnInt8.value()), Ok(value2));
+    //     }
 
-        assert_eq!(
-            de2.read::<i8>(TarsTypeMark::EnInt8.value()),
-            Err(DecodeErr::NoEnoughDataErr)
-        );
+    //     assert_eq!(
+    //         de2.read::<i8>(TarsTypeMark::EnInt8.value()),
+    //         Err(DecodeErr::NoEnoughDataErr)
+    //     );
 
-        let mut v = vec![];
-        let value3: i8 = -42;
-        for i in 0..10 as u8 {
-            let head = (i << 4) | TarsTypeMark::EnInt8.value();
-            v.push(head);
-            v.push(value3 as u8);
-        }
-        let mut de3 = TarsDecoder::from(v);
+    //     let mut v = vec![];
+    //     let value3: i8 = -42;
+    //     for i in 0..10 as u8 {
+    //         let head = (i << 4) | TarsTypeMark::EnInt8.value();
+    //         v.push(head);
+    //         v.push(value3 as u8);
+    //     }
+    //     let mut de3 = TarsDecoder::from(v);
 
-        for i in 0..10 as u8 {
-            assert_eq!(de3.get(i), Ok(value3));
-        }
-    }
+    //     for i in 0..10 as u8 {
+    //         assert_eq!(de3.get(i), Ok(value3));
+    //     }
+    // }
 
-    #[test]
-    fn test_decode_double() {
-        let b2: [u8; 8] = unsafe { mem::transmute(0.633313f64.to_bits().to_be()) };
-        let mut de2 = TarsDecoder::from(&b2[..]);
-        let f: f64 = de2.read(TarsTypeMark::EnDouble.value()).unwrap();
-        assert!(f == 0.633313f64);
-    }
+    // #[test]
+    // fn test_decode_double() {
+    //     let b2: [u8; 8] = unsafe { mem::transmute(0.633313f64.to_bits().to_be()) };
+    //     let mut de2 = TarsDecoder::from(&b2[..]);
+    //     let f: f64 = de2.read(TarsTypeMark::EnDouble.value()).unwrap();
+    //     assert!(f == 0.633313f64);
+    // }
 
-    #[test]
-    fn test_decode_float() {
-        let b2: [u8; 4] = unsafe { mem::transmute(0.35524f32.to_bits().to_be()) };
-        let mut de2 = TarsDecoder::from(&b2[..]);
-        let f: f32 = de2.read(TarsTypeMark::EnFloat.value()).unwrap();
-        assert!(f == 0.35524f32);
-    }
+    // #[test]
+    // fn test_decode_float() {
+    //     let b2: [u8; 4] = unsafe { mem::transmute(0.35524f32.to_bits().to_be()) };
+    //     let mut de2 = TarsDecoder::from(&b2[..]);
+    //     let f: f32 = de2.read(TarsTypeMark::EnFloat.value()).unwrap();
+    //     assert!(f == 0.35524f32);
+    // }
 
     #[test]
     fn test_decode_string() {
         // test read string1
-        let d: [u8; 8] = [7, b'f', b'o', b'o', b' ', b'b', b'a', b'r'];
+        let d: [u8; 9] = [0x06, 0x07, b'f', b'o', b'o', b' ', b'b', b'a', b'r'];
         let mut de = TarsDecoder::from(&d[..]);
-        assert_eq!(
-            de.read(TarsTypeMark::EnString1.value()),
-            Ok(String::from(&"foo bar"[..]))
-        );
+        assert_eq!(de.read_string(0).unwrap(), String::from(&"foo bar"[..]));
 
-        // test read string4
-        let size: [u8; 4] = unsafe { mem::transmute(7u32.to_be()) };
-        let d2: [u8; 11] = [
-            size[0], size[1], size[2], size[3], b'f', b'o', b'o', b' ', b'b', b'a', b'r',
-        ];
-        let mut de2 = TarsDecoder::from(&d2[..]);
-        assert_eq!(
-            de2.read(TarsTypeMark::EnString4.value()),
-            Ok(String::from(&"foo bar"[..]))
-        );
+        // // test read string4
+        // let size: [u8; 4] = unsafe { mem::transmute(7u32.to_be()) };
+        // let d2: [u8; 11] = [
+        //     size[0], size[1], size[2], size[3], b'f', b'o', b'o', b' ', b'b', b'a', b'r',
+        // ];
+        // let mut de2 = TarsDecoder::from(&d2[..]);
+        // assert_eq!(
+        //     de2.read(TarsTypeMark::EnString4.value()),
+        //     Ok(String::from(&"foo bar"[..]))
+        // );
 
-        // test get string by tag
-        let mut d3 = vec![];
-        d3.push(0x07);
-        d3.extend_from_slice(&d2);
-        let mut de3 = TarsDecoder::from(&d3[..]);
-        assert_eq!(de3.get(0), Ok(String::from(&"foo bar"[..])));
+        // // test get string by tag
+        // let mut d3 = vec![];
+        // d3.push(0x07);
+        // d3.extend_from_slice(&d2);
+        // let mut de3 = TarsDecoder::from(&d3[..]);
+        // assert_eq!(de3.get(0), Ok(String::from(&"foo bar"[..])));
     }
 
-    #[test]
-    fn test_decode_bool() {
-        let d: [u8; 3] = [0x0c, 0x10, 0x01];
-        let mut de = TarsDecoder::from(&d[..]);
-        let b: bool = de.get(0).unwrap();
-        let b2: bool = de.get(1).unwrap();
-        assert_eq!(b, false);
-        assert_eq!(b2, true);
-    }
+    // #[test]
+    // fn test_decode_bool() {
+    //     let d: [u8; 3] = [0x0c, 0x10, 0x01];
+    //     let mut de = TarsDecoder::from(&d[..]);
+    //     let b: bool = de.get(0).unwrap();
+    //     let b2: bool = de.get(1).unwrap();
+    //     assert_eq!(b, false);
+    //     assert_eq!(b2, true);
+    // }
 
-    #[test]
-    fn test_decode_bytes() {
-        let d: [u8; 18] = *b"\x9d\x00\x00\x00\x00\x0chello world!";
-        let mut de = TarsDecoder::from(&d[..]);
-        let b: Bytes = de.get(9).unwrap();
-        assert_eq!(b, Bytes::from(&b"hello world!"[..]));
-    }
+    // #[test]
+    // fn test_decode_bytes() {
+    //     let d: [u8; 18] = *b"\x9d\x00\x00\x00\x00\x0chello world!";
+    //     let mut de = TarsDecoder::from(&d[..]);
+    //     let b: Bytes = de.get(9).unwrap();
+    //     assert_eq!(b, Bytes::from(&b"hello world!"[..]));
+    // }
 }
