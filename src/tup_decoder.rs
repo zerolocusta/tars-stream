@@ -85,9 +85,9 @@ where
             None => Err(DecodeErr::FieldNotFoundErr(
                 String::from("TupDecoder<ComplexTup> not found field: ") + name,
             )),
-            Some(item) => match item.get(&T::class_name()) {
+            Some(item) => match item.get(&T::_class_name()) {
                 None => Err(DecodeErr::TypeNotFoundErr(
-                    "TupDecoder<ComplexTup> not found type: ".to_string() + &T::class_name(),
+                    "TupDecoder<ComplexTup> not found type: ".to_string() + &T::_class_name(),
                 )),
                 Some(b) => Ok(TarsDecoder::individual_decode::<T>(b)?),
             },
@@ -102,7 +102,7 @@ where
     fn get(&self, name: &String) -> Result<Option<T>, DecodeErr> {
         match self.map.get(name) {
             None => Ok(None),
-            Some(item) => match item.get(&T::class_name()) {
+            Some(item) => match item.get(&T::_class_name()) {
                 None => Ok(None),
                 Some(b) => Ok(Some(TarsDecoder::individual_decode::<T>(b)?)),
             },
@@ -168,7 +168,7 @@ mod tests {
         let key1 = String::from("hello");
         let value1 = String::from("world");
         item1.insert(
-            String::class_name(),
+            String::_class_name(),
             TarsEncoder::individual_encode(&value1).unwrap(),
         );
         map.insert(key1.clone(), item1);
@@ -177,7 +177,7 @@ mod tests {
         let key2 = String::from("foo");
         let value2: u8 = 255;
         item2.insert(
-            u8::class_name(),
+            u8::_class_name(),
             TarsEncoder::individual_encode(&value2).unwrap(),
         );
         map.insert(key2.clone(), item2);
@@ -186,7 +186,7 @@ mod tests {
         let key2 = String::from("foo");
         let value2: u16 = 65535;
         item2.insert(
-            u16::class_name(),
+            u16::_class_name(),
             TarsEncoder::individual_encode(&value2).unwrap(),
         );
         map.insert(key2.clone(), item2);

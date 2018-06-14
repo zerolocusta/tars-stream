@@ -4,7 +4,7 @@ use std::io::Cursor;
 use std::mem;
 
 use errors::DecodeErr;
-use tars_type::TarsTypeMark;
+use tars_type::TarsTypeMark::*;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct TarsDecoder {
@@ -43,8 +43,13 @@ impl TarsDecoder {
         self.buf.len() - self.pos
     }
 
+    fn reset_pos(&mut self) {
+        self.pos = 0;
+    }
+
     // TODO: may not reset pos
     fn skip_to_tag(&mut self, tag: u8) -> Result<Head, DecodeErr> {
+        self.reset_pos();
         let mut result: Option<Head> = None;
         while self.has_remaining() {
             let head = self.take_head()?;
@@ -209,7 +214,7 @@ impl From<Vec<u8>> for TarsDecoder {
     }
 }
 pub trait TarsDecoderTrait<T> {
-    fn get(&mut self, tag: u8) -> Result<T, DecodeErr>;
+    fn readInt8(&mut self, tag: u8) -> Result<i8, DecodeErr>;
 }
 
 // for require field
@@ -217,12 +222,13 @@ impl<T> TarsDecoderTrait<T> for TarsDecoder
 where
     T: DecodeFromTars,
 {
-    default fn get(&mut self, tag: u8) -> Result<T, DecodeErr> {
-        self.pos = 0;
-        if let Ok(head) = self.skip_to_tag(tag) {
-            Ok(self.read::<T>(head.tars_type)?)
+    fn readInt8(&mut self, tag: u8) -> Result<i8, DecodeErr> {
+        let head = self.skip_to_tag(tag)?;
+        if head.tars_type == EnInt8.value() {
+            let mut cur = Cursor::new(b);
+            Ok(cur.get_i8())
         } else {
-            Err(DecodeErr::TagNotFoundErr)
+            Err(DecodeErr::MisMatchTarsTypeErr)
         }
     }
 }

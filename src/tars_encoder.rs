@@ -23,7 +23,7 @@ impl TarsEncoder {
 
     pub fn individual_encode<T>(ele: &T) -> Result<Bytes, EncodeErr>
     where
-        T: EncodeIntoTars,
+        T: EncodeIntoTars + ClassName,
     {
         let mut encoder = TarsEncoder::new();
         encoder.put(0, ele)?;
@@ -77,14 +77,25 @@ pub trait TarsEncoderTrait<T> {
 
 impl<T> TarsEncoderTrait<T> for TarsEncoder
 where
-    T: EncodeIntoTars,
+    T: EncodeIntoTars + ClassName,
 {
     // specialization for all tars type expect struct
     default fn put(&mut self, tag: u8, ele: &T) -> Result<(), EncodeErr> {
-        self.put_head(tag, EnStructBegin)?;
-        ele.encode_into_tars(self)?;
-        self.put_head(0, EnStructEnd)?;
-        Ok(())
+        println!("{:?}", T::_type_name());
+        match T::_type_name() {
+            "struct" => {
+                self.put_head(tag, EnStructBegin)?;
+                ele.encode_into_tars(self)?;
+                self.put_head(0, EnStructEnd)?;
+                Ok(())
+            }
+            "enum" => {
+                self.put_head(tag, EnInt32)?;
+                ele.encode_into_tars(self)?;
+                Ok(())
+            },
+            _ => Err(EncodeErr::UnknownTarsTypeErr)
+        }
     }
 }
 
@@ -219,8 +230,8 @@ impl TarsEncoderTrait<String> for TarsEncoder {
 
 impl<K, V> TarsEncoderTrait<BTreeMap<K, V>> for TarsEncoder
 where
-    K: EncodeIntoTars + Ord,
-    V: EncodeIntoTars,
+    K: EncodeIntoTars + ClassName + Ord,
+    V: EncodeIntoTars + ClassName,
 {
     fn put(&mut self, tag: u8, ele: &BTreeMap<K, V>) -> Result<(), EncodeErr> {
         self.put_head(tag, EnMaps)?;
@@ -231,7 +242,7 @@ where
 
 impl<T> TarsEncoderTrait<Vec<T>> for TarsEncoder
 where
-    T: EncodeIntoTars,
+    T: EncodeIntoTars + ClassName,
 {
     default fn put(&mut self, tag: u8, ele: &Vec<T>) -> Result<(), EncodeErr> {
         self.put_head(tag, EnList)?;
@@ -269,7 +280,7 @@ impl TarsEncoderTrait<Bytes> for TarsEncoder {
 
 impl<T> TarsEncoderTrait<Option<T>> for TarsEncoder
 where
-    T: EncodeIntoTars,
+    T: EncodeIntoTars + ClassName,
 {
     fn put(&mut self, tag: u8, ele: &Option<T>) -> Result<(), EncodeErr> {
         match ele {
@@ -317,22 +328,19 @@ impl EncodeIntoTars for i64 {
 
 impl EncodeIntoTars for u8 {
     fn encode_into_tars(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
-        encoder.buf.put_i16_be(*self as i16);
-        Ok(())
+        (*self as i16).encode_into_tars(encoder)
     }
 }
 
 impl EncodeIntoTars for u16 {
     fn encode_into_tars(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
-        encoder.buf.put_i32_be(*self as i32);
-        Ok(())
+        (*self as i32).encode_into_tars(encoder)
     }
 }
 
 impl EncodeIntoTars for u32 {
     fn encode_into_tars(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
-        encoder.buf.put_i64_be(*self as i64);
-        Ok(())
+        (*self as i16).encode_into_tars(encoder)
     }
 }
 
@@ -366,8 +374,8 @@ impl EncodeIntoTars for String {
 
 impl<K, V> EncodeIntoTars for BTreeMap<K, V>
 where
-    K: EncodeIntoTars + Ord,
-    V: EncodeIntoTars,
+    K: EncodeIntoTars + ClassName + Ord,
+    V: EncodeIntoTars + ClassName,
 {
     fn encode_into_tars(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
         let mut inner_encoder = TarsEncoder::new();
@@ -391,7 +399,7 @@ where
 
 impl<T> EncodeIntoTars for Vec<T>
 where
-    T: EncodeIntoTars,
+    T: EncodeIntoTars + ClassName,
 {
     default fn encode_into_tars(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
         let mut inner_encoder = TarsEncoder::new();

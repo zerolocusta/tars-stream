@@ -1,3 +1,6 @@
+use bytes::Bytes;
+use std::collections::BTreeMap;
+
 #[derive(Clone, Debug)]
 pub enum TarsTypeMark {
     EnInt8 = 0,
@@ -46,80 +49,145 @@ impl From<u8> for ProtocolVersion {
     }
 }
 
-pub trait EnumMarker {}
-
+// for tup encoding/decoding
 pub trait ClassName {
-    fn class_name() -> String;
+    fn _class_name() -> String;
+    fn _type_name() -> &'static str;
 }
 
 impl ClassName for bool {
-    fn class_name() -> String {
+    fn _class_name() -> String {
         String::from("bool")
+    }
+    fn _type_name() -> &'static str {
+        "bool"
     }
 }
 
 impl ClassName for i8 {
-    fn class_name() -> String {
+    fn _class_name() -> String {
         String::from("char")
+    }
+    fn _type_name() -> &'static str {
+        "char"
     }
 }
 
 impl ClassName for i16 {
-    fn class_name() -> String {
+    fn _class_name() -> String {
         String::from("short")
+    }
+    fn _type_name() -> &'static str {
+        "short"
     }
 }
 
 impl ClassName for i32 {
-    fn class_name() -> String {
+    fn _class_name() -> String {
         String::from("int32")
+    }
+    fn _type_name() -> &'static str {
+        "int32"
     }
 }
 
 impl ClassName for i64 {
-    fn class_name() -> String {
+    fn _class_name() -> String {
         String::from("int64")
+    }
+    fn _type_name() -> &'static str {
+        "int64"
     }
 }
 
 impl ClassName for u8 {
-    fn class_name() -> String {
-        String::from("char")
+    fn _class_name() -> String {
+        String::from("short")
+    }
+    fn _type_name() -> &'static str {
+        "short"
     }
 }
 
 impl ClassName for u16 {
-    fn class_name() -> String {
-        String::from("short")
+    fn _class_name() -> String {
+        String::from("int32")
+    }
+    fn _type_name() -> &'static str {
+        "int32"
     }
 }
 
 impl ClassName for u32 {
-    fn class_name() -> String {
-        String::from("int32")
+    fn _class_name() -> String {
+        String::from("int64")
+    }
+    fn _type_name() -> &'static str {
+        "int64"
     }
 }
 
 impl ClassName for f32 {
-    fn class_name() -> String {
+    fn _class_name() -> String {
         String::from("float")
+    }
+    fn _type_name() -> &'static str {
+        "float"
     }
 }
 
 impl ClassName for f64 {
-    fn class_name() -> String {
+    fn _class_name() -> String {
         String::from("double")
+    }
+    fn _type_name() -> &'static str {
+        "double"
     }
 }
 
 impl ClassName for String {
-    fn class_name() -> String {
+    fn _class_name() -> String {
         String::from("string")
+    }
+    fn _type_name() -> &'static str {
+        "string"
     }
 }
 
-impl<T: EnumMarker> ClassName for T {
-    fn class_name() -> String {
-        String::from("i32")
-    } 
+impl<K, V> ClassName for BTreeMap<K, V>
+where
+    K: ClassName + Ord,
+    V: ClassName,
+{
+    fn _class_name() -> String {
+        String::from("map<")
+            + &K::_class_name()
+            + &String::from(",")
+            + &V::_class_name()
+            + &String::from(">")
+    }
+    fn _type_name() -> &'static str {
+        "map"
+    }
+}
+
+impl<T> ClassName for Vec<T>
+where
+    T: ClassName,
+{
+    fn _class_name() -> String {
+        String::from("list<") + &T::_class_name() + &String::from(">")
+    }
+    fn _type_name() -> &'static str {
+        "list"
+    }
+}
+
+impl ClassName for Bytes {
+    fn _class_name() -> String {
+        String::from("list<byte>")
+    }
+    fn _type_name() -> &'static str {
+        "list"
+    }
 }

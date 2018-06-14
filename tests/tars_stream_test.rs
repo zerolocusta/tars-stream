@@ -94,8 +94,14 @@ impl EncodeIntoTars for TestStruct {
     }
 }
 
-unsafe impl Sync for TestStruct {}
-unsafe impl Send for TestStruct {}
+impl ClassName for TestStruct {
+    fn _class_name() -> String {
+        String::from("TestStruct")
+    }
+    fn _type_name() -> &'static str {
+        "struct"
+    }
+}
 
 #[test]
 fn test_encode_decode_struct() {
@@ -116,6 +122,37 @@ fn test_encode_decode_struct() {
     let de_ts = TestStruct::decode_from_tars(&encoder.to_bytes()).unwrap();
 
     assert_eq!(de_ts, ts);
+}
+
+#[derive(Clone, Debug, PartialEq)]
+enum TestEnum {
+    A = -32,
+    B = 1337,
+}
+
+impl DecodeFromTars for TestEnum {
+    fn decode_from_tars(b: &Bytes) -> Result<Self, DecodeErr> {
+        match i32::decode_from_tars(b)? {
+            -32 => Ok(TestEnum::A),
+            1337 => Ok(TestEnum::B),
+            _ => Err(DecodeErr::InvalidEnumValue),
+        }
+    }
+}
+
+impl EncodeIntoTars for TestEnum {
+    fn encode_into_tars(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
+        (self.clone() as i32).encode_into_tars(encoder)
+    }
+}
+
+impl ClassName for TestEnum {
+    fn _class_name() -> String {
+        String::from("TestEnum")
+    }
+    fn _type_name() -> &'static str {
+        "enum"
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -140,6 +177,7 @@ struct TestStruct2 {
     y: Option<u8>,               // 14
     z: Option<TestStruct>,       // 15
     x: Bytes,
+    e: Vec<TestEnum>,
 }
 
 impl TestStruct2 {
@@ -165,6 +203,7 @@ impl TestStruct2 {
             y: None,
             z: None,
             x: Bytes::new(),
+            e: vec![],
         }
     }
 }
@@ -192,6 +231,8 @@ impl DecodeFromTars for TestStruct2 {
         let y = de.get(14)?;
         let z = de.get(15)?;
         let x = de.get(16)?;
+        let e = de.get(17)?;
+
         Ok(TestStruct2 {
             f1,
             f2,
@@ -209,6 +250,7 @@ impl DecodeFromTars for TestStruct2 {
             y,
             z,
             x,
+            e,
         })
     }
 }
@@ -234,13 +276,20 @@ impl EncodeIntoTars for TestStruct2 {
         encoder.put(14, &self.y)?;
         encoder.put(15, &self.z)?;
         encoder.put(16, &self.x)?;
+        encoder.put(17, &self.e)?;
 
         Ok(())
     }
 }
 
-unsafe impl Sync for TestStruct2 {}
-unsafe impl Send for TestStruct2 {}
+impl ClassName for TestStruct2 {
+    fn _class_name() -> String {
+        String::from("TestStruct2")
+    }
+    fn _type_name() -> &'static str {
+        "struct"
+    }
+}
 
 #[test]
 fn test_encode_decode_struct2() {
@@ -287,6 +336,15 @@ fn test_encode_decode_struct2() {
     ts.z = Some(TestStruct::random_for_test());
     ts.x = Bytes::from(ts.s.v1.as_slice());
 
+    let e_len: u8 = random();
+    for _ in 0..e_len {
+        let b: bool = random();
+        if b {
+            ts.e.push(TestEnum::A);
+        } else {
+            ts.e.push(TestEnum::B);
+        }
+    }
     let mut encoder = TarsEncoder::new();
 
     ts.encode_into_tars(&mut encoder).unwrap();

@@ -10,6 +10,9 @@ quick_error!{
         TagNotFoundErr{
             description("decoder: Tag Not Found")
         }
+        MisMatchTarsTypeErr {
+            description("decoder: mismatch type")
+        }
         WrongSimpleListTarsTypeErr {
             description("decoder: wrong simple list type")
         }
@@ -45,6 +48,9 @@ quick_error!{
         }
         BufferTooBigErr {
             description("encoder: BufferTooBigErr len bigger than 4294967295 bytes")
+        }
+        UnknownTarsTypeErr{
+            description("encoder: unknown tars type")
         }
     }
 }
