@@ -969,7 +969,7 @@ mod tests {
             b'b',
             b'a',
             b'r',
-            // {tag: 0, type: 6}
+            // {tag: 1, type: 6}
             0x16,
             11,
             b'h',
@@ -1140,4 +1140,12 @@ mod tests {
         let err: Result<Bytes, DecodeErr> = de.read_bytes(129, true, Bytes::default());
         assert_eq!(err, Err(DecodeErr::TagNotFoundErr));
     }
+
+    // #[test]
+    // fn test_decode_struct() {
+    //     struct Test {
+    //         a: u32
+    //         b: Vec<i8>
+    //     }
+    // }
 }

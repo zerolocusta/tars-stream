@@ -1,128 +1,128 @@
-// #[cfg(test)]
-// extern crate bytes;
-// extern crate rand;
-// extern crate tars_stream;
-// extern crate uuid;
+#[cfg(test)]
+extern crate bytes;
+extern crate rand;
+extern crate tars_stream;
+extern crate uuid;
 
-// use bytes::Bytes;
-// use rand::random;
-// use std::collections::BTreeMap;
-// use tars_stream::prelude::*;
-// use uuid::Uuid;
+use bytes::Bytes;
+use rand::random;
+use std::collections::BTreeMap;
+use tars_stream::prelude::*;
+use uuid::Uuid;
 
-// #[derive(Clone, Debug, PartialEq)]
-// struct TestStruct {
-//     a: i8,             // tag 0
-//     b: u16,            // tag 1
-//     v1: Vec<u8>,       // tag 2
-//     c: Option<String>, // tag 3 option
-//     v2: Vec<i8>,
-//     v3: Vec<bool>,
-// }
+#[derive(Clone, Debug, PartialEq)]
+struct TestStruct {
+    a: i8,             // tag 0
+    b: u16,            // tag 1
+    v1: Vec<u8>,       // tag 2
+    c: String, // tag 3 option
+    v2: Vec<i8>,
+    v3: Vec<bool>,
+}
 
-// impl TestStruct {
-//     pub fn new() -> Self {
-//         TestStruct {
-//             a: 0,
-//             b: 0,
-//             v1: vec![],
-//             c: None,
-//             v2: vec![],
-//             v3: vec![],
-//         }
-//     }
+impl TestStruct {
+    pub fn new() -> Self {
+        TestStruct {
+            a: 0,
+            b: 0,
+            v1: vec![],
+            c: String::from("hello world"),
+            v2: vec![],
+            v3: vec![],
+        }
+    }
 
-//     pub fn random_for_test() -> Self {
-//         let vec_len: u8 = random();
-//         let mut v1 = vec![];
-//         for _ in 0..vec_len {
-//             v1.push(random());
-//         }
+    pub fn random_for_test() -> Self {
+        let vec_len: u8 = random();
+        let mut v1 = vec![];
+        for _ in 0..vec_len {
+            v1.push(random());
+        }
 
-//         let vec_len: u8 = random();
-//         let mut v2 = vec![];
-//         for _ in 0..vec_len {
-//             v2.push(random());
-//         }
+        let vec_len: u8 = random();
+        let mut v2 = vec![];
+        for _ in 0..vec_len {
+            v2.push(random());
+        }
 
-//         let vec_len: u8 = random();
-//         let mut v3 = vec![];
-//         for _ in 0..vec_len {
-//             v3.push(random());
-//         }
+        let vec_len: u8 = random();
+        let mut v3 = vec![];
+        for _ in 0..vec_len {
+            v3.push(random());
+        }
 
-//         TestStruct {
-//             a: random(),
-//             b: random(),
-//             v1: v1,
-//             c: Some(Uuid::new_v4().to_string()),
-//             v2: v2,
-//             v3: v3,
-//         }
-//     }
-// }
+        TestStruct {
+            a: random(),
+            b: random(),
+            v1: v1,
+            c: Uuid::new_v4().to_string(),
+            v2: v2,
+            v3: v3,
+        }
+    }
+}
 
-// impl DecodeFromTars for TestStruct {
-//     fn decode_from_tars(b: &Bytes) -> Result<Self, DecodeErr> {
-//         let mut de = TarsDecoder::from(b);
-//         let a = de.get(0)?;
-//         let b = de.get(1)?;
-//         let v1 = de.get(2)?;
-//         let c = de.get(3)?;
-//         let v2 = de.get(4)?;
-//         let v3 = de.get(5)?;
-//         Ok(TestStruct {
-//             a,
-//             b,
-//             v1,
-//             c,
-//             v2,
-//             v3,
-//         })
-//     }
-// }
+impl DecodeFromTars for TestStruct {
+    fn decode_from_tars(decoder: &TarsDecoder, _tag: u8) -> Result<Self, DecodeErr> {
+        let a = decoder.read_int8(0, true, 0)?;
+        let b = decoder.read_uint16(1, true, 0)?;
+        let v1 = decoder.read_list(2, true, vec![])?;
+        let c = decoder.read_string(3, false, "hello world".to_string())?;
+        let v2 = decoder.read_list(4, true, vec![])?;
+        let v3 = decoder.read_list(5, true, vec![])?;
+        Ok(TestStruct {
+            a,
+            b,
+            v1,
+            c,
+            v2,
+            v3,
+        })
+    }
+}
 
-// impl EncodeIntoTars for TestStruct {
-//     fn encode_into_tars(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
-//         encoder.put(0, &self.a)?;
-//         encoder.put(1, &self.b)?;
-//         encoder.put(2, &self.v1)?;
-//         encoder.put(3, &self.c)?;
-//         encoder.put(4, &self.v2)?;
-//         encoder.put(5, &self.v3)?;
-//         Ok(())
-//     }
-// }
+impl EncodeIntoTars for TestStruct {
+    fn encode_into_tars(&self, encoder: &mut TarsEncoder, _tag: u8) -> Result<(), EncodeErr> {
+        encoder.write_int8(0, self.a)?;
+        encoder.write_uint16(1, self.b)?;
+        encoder.write_list(2, &self.v1)?;
+        encoder.write_string(3, &self.c)?;
+        encoder.write_list(4, &self.v2)?;
+        encoder.write_list(5, &self.v3)?;
+        Ok(())
+    }
+}
 
-// impl ClassName for TestStruct {
-//     fn _class_name() -> String {
-//         String::from("TestStruct")
-//     }
-//     fn _type_name() -> &'static str {
-//         "struct"
-//     }
-// }
+impl ClassName for TestStruct {
+    fn _class_name() -> String {
+        String::from("TarsStreamTest.TestStruct")
+    }
+}
 
-// #[test]
-// fn test_encode_decode_struct() {
-//     let mut encoder = TarsEncoder::new();
-//     let ts = TestStruct::new();
+#[test]
+fn test_encode_decode_struct() {
+    let mut encoder = TarsEncoder::new();
+    let ts = TestStruct::new();
 
-//     ts.encode_into_tars(&mut encoder).unwrap();
+    ts.encode_into_tars(&mut encoder, 0).unwrap();
 
-//     let de_ts = TestStruct::decode_from_tars(&encoder.to_bytes()).unwrap();
+    let decoder = TarsDecoder::from(&encoder.to_bytes());
 
-//     assert_eq!(de_ts, ts);
+    let de_ts = TestStruct::decode_from_tars(&decoder, 0).unwrap();
 
-//     let mut encoder = TarsEncoder::new();
-//     let ts = TestStruct::random_for_test();
+    assert_eq!(de_ts, ts);
 
-//     ts.encode_into_tars(&mut encoder).unwrap();
+    let mut encoder = TarsEncoder::new();
+    let ts = TestStruct::random_for_test();
 
-//     let de_ts = TestStruct::decode_from_tars(&encoder.to_bytes()).unwrap();
+    ts.encode_into_tars(&mut encoder, 0).unwrap();
 
-//     assert_eq!(de_ts, ts);
-// }
+    let decoder = TarsDecoder::from(&encoder.to_bytes());
+
+    let de_ts = TestStruct::decode_from_tars(&decoder, 0).unwrap();
+
+    assert_eq!(de_ts, ts);
+}
 
 // #[derive(Clone, Debug, PartialEq)]
 // enum TestEnum {
@@ -149,9 +149,6 @@
 // impl ClassName for TestEnum {
 //     fn _class_name() -> String {
 //         String::from("TestEnum")
-//     }
-//     fn _type_name() -> &'static str {
-//         "enum"
 //     }
 // }
 
@@ -285,9 +282,6 @@
 // impl ClassName for TestStruct2 {
 //     fn _class_name() -> String {
 //         String::from("TestStruct2")
-//     }
-//     fn _type_name() -> &'static str {
-//         "struct"
 //     }
 // }
 

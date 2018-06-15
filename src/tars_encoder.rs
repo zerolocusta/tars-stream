@@ -21,18 +21,14 @@ impl TarsEncoder {
         }
     }
 
-    pub fn individual_encode<T>(ele: &T) -> Result<Bytes, EncodeErr>
-    where
-        T: EncodeIntoTars + ClassName,
-    {
-        let mut encoder = TarsEncoder::new();
-        encoder.put(0, ele)?;
-        Ok(encoder.to_bytes())
-    }
-
-    pub fn len(&self) -> usize {
-        self.buf.len()
-    }
+    // pub fn individual_encode<T>(ele: &T) -> Result<Bytes, EncodeErr>
+    // where
+    //     T: EncodeIntoTars + ClassName,
+    // {
+    //     let mut encoder = TarsEncoder::new();
+    //     encoder.put(0, ele)?;
+    //     Ok(encoder.to_bytes())
+    // }
 
     // move out buf
     pub fn to_bytes(self) -> Bytes {
@@ -43,13 +39,9 @@ impl TarsEncoder {
         self.buf
     }
 
-    pub fn unsplit(&mut self, another: TarsEncoder) {
-        self.buf.unsplit(another.to_bytes_mut());
-    }
-
     pub fn check_maybe_resize(&mut self, len: usize) {
         if self.buf.remaining_mut() < len {
-            let new_len = self.buf.remaining_mut() + len + 1;
+            let new_len = self.buf.remaining_mut() + len + 1024;
             self.buf.reserve(new_len)
         }
     }
@@ -71,137 +63,129 @@ impl TarsEncoder {
     }
 }
 
-pub trait TarsEncoderTrait<T> {
-    fn put(&mut self, tag: u8, ele: &T) -> Result<(), EncodeErr>;
+// all write_xxxx method will move value into TarsDecoder
+
+pub trait TarsEncoderSimpleTrait {
+    fn write_int8(&mut self, tag: u8, ele: i8) -> Result<(), EncodeErr>;
+    fn write_boolean(&mut self, tag: u8, ele: bool) -> Result<(), EncodeErr>;
+
+    fn write_int16(&mut self, tag: u8, ele: i16) -> Result<(), EncodeErr>;
+    fn write_int32(&mut self, tag: u8, ele: i32) -> Result<(), EncodeErr>;
+    fn write_int64(&mut self, tag: u8, ele: i64) -> Result<(), EncodeErr>;
+
+    fn write_uint8(&mut self, tag: u8, ele: u8) -> Result<(), EncodeErr>;
+    fn write_uint16(&mut self, tag: u8, ele: u16) -> Result<(), EncodeErr>;
+    fn write_uint32(&mut self, tag: u8, ele: u32) -> Result<(), EncodeErr>;
+
+    fn write_float(&mut self, tag: u8, ele: f32) -> Result<(), EncodeErr>;
+    fn write_double(&mut self, tag: u8, ele: f64) -> Result<(), EncodeErr>;
+
+    fn write_string(&mut self, tag: u8, ele: &String) -> Result<(), EncodeErr>;
+
+    fn write_bytes(&mut self, tag: u8, ele: &Bytes) -> Result<(), EncodeErr>;
 }
 
-impl<T> TarsEncoderTrait<T> for TarsEncoder
+pub trait TarsEncoderMapTrait<K, V>
 where
-    T: EncodeIntoTars + ClassName,
+    K: EncodeIntoTars + Ord,
+    V: EncodeIntoTars,
 {
-    // specialization for all tars type expect struct
-    default fn put(&mut self, tag: u8, ele: &T) -> Result<(), EncodeErr> {
-        println!("{:?}", T::_type_name());
-        match T::_type_name() {
-            "struct" => {
-                self.put_head(tag, EnStructBegin)?;
-                ele.encode_into_tars(self)?;
-                self.put_head(0, EnStructEnd)?;
-                Ok(())
-            }
-            "enum" => {
-                self.put_head(tag, EnInt32)?;
-                ele.encode_into_tars(self)?;
-                Ok(())
-            }
-            _ => Err(EncodeErr::UnknownTarsTypeErr),
-        }
-    }
+    fn write_map(&mut self, tag: u8, ele: &BTreeMap<K, V>) -> Result<(), EncodeErr>;
 }
 
-impl TarsEncoderTrait<i8> for TarsEncoder {
-    fn put(&mut self, tag: u8, ele: &i8) -> Result<(), EncodeErr> {
-        if *ele == 0 {
-            self.put_head(tag, EnZero)?;
+pub trait TarsEncodeListTrait<T>
+where
+    T: EncodeIntoTars,
+{
+    fn write_list(&mut self, tag: u8, ele: &Vec<T>) -> Result<(), EncodeErr>;
+}
+
+pub trait TarsEncodeStructTrait<T> {
+    fn write_struct(&mut self, tag: u8, ele: &T) -> Result<(), EncodeErr>;
+}
+
+impl TarsEncoderSimpleTrait for TarsEncoder {
+    fn write_int8(&mut self, tag: u8, ele: i8) -> Result<(), EncodeErr> {
+        if ele == 0 {
+            self.put_head(tag, EnZero)
         } else {
             self.put_head(tag, EnInt8)?;
             self.check_maybe_resize(mem::size_of::<i8>());
-            ele.encode_into_tars(self)?;
+            self.buf.put_i8(ele);
+            Ok(())
         }
-        Ok(())
     }
-}
 
-impl TarsEncoderTrait<i16> for TarsEncoder {
-    fn put(&mut self, tag: u8, ele: &i16) -> Result<(), EncodeErr> {
-        if *ele >= i16::from(i8::min_value()) && *ele <= i16::from(i8::max_value()) {
-            self.put(tag, &(*ele as i8))?;
+    fn write_boolean(&mut self, tag: u8, ele: bool) -> Result<(), EncodeErr> {
+        self.write_int8(tag, ele as i8)
+    }
+
+    fn write_int16(&mut self, tag: u8, ele: i16) -> Result<(), EncodeErr> {
+        if ele >= i16::from(i8::min_value()) && ele <= i16::from(i8::max_value()) {
+            self.write_int8(tag, ele as i8)
         } else {
             self.put_head(tag, EnInt16)?;
             self.check_maybe_resize(mem::size_of::<i16>());
-            ele.encode_into_tars(self)?;
+            self.buf.put_i16_be(ele);
+            Ok(())
         }
-        Ok(())
     }
-}
 
-impl TarsEncoderTrait<i32> for TarsEncoder {
-    fn put(&mut self, tag: u8, ele: &i32) -> Result<(), EncodeErr> {
-        if *ele >= i32::from(i16::min_value()) && *ele <= i32::from(i16::max_value()) {
-            self.put(tag, &(*ele as i16))?;
+    fn write_int32(&mut self, tag: u8, ele: i32) -> Result<(), EncodeErr> {
+        if ele >= i32::from(i16::min_value()) && ele <= i32::from(i16::max_value()) {
+            self.write_int16(tag, ele as i16)
         } else {
             self.put_head(tag, EnInt32)?;
             self.check_maybe_resize(mem::size_of::<i32>());
-            ele.encode_into_tars(self)?;
+            self.buf.put_i32_be(ele);
+            Ok(())
         }
-        Ok(())
     }
-}
 
-impl TarsEncoderTrait<i64> for TarsEncoder {
-    fn put(&mut self, tag: u8, ele: &i64) -> Result<(), EncodeErr> {
-        if *ele >= i64::from(i32::min_value()) && *ele <= i64::from(i32::max_value()) {
-            self.put(tag, &(*ele as i32))?;
+    fn write_int64(&mut self, tag: u8, ele: i64) -> Result<(), EncodeErr> {
+        if ele >= i64::from(i32::min_value()) && ele <= i64::from(i32::max_value()) {
+            self.write_int32(tag, ele as i32)
         } else {
             self.put_head(tag, EnInt64)?;
             self.check_maybe_resize(mem::size_of::<i64>());
-            ele.encode_into_tars(self)?;
+            self.buf.put_i64_be(ele);
+            Ok(())
         }
-        Ok(())
     }
-}
 
-impl TarsEncoderTrait<u8> for TarsEncoder {
-    fn put(&mut self, tag: u8, ele: &u8) -> Result<(), EncodeErr> {
-        self.put(tag, &(*ele as i16))
+    fn write_uint8(&mut self, tag: u8, ele: u8) -> Result<(), EncodeErr> {
+        self.write_int16(tag, ele as i16)
     }
-}
 
-impl TarsEncoderTrait<u16> for TarsEncoder {
-    fn put(&mut self, tag: u8, ele: &u16) -> Result<(), EncodeErr> {
-        self.put(tag, &(*ele as i32))
+    fn write_uint16(&mut self, tag: u8, ele: u16) -> Result<(), EncodeErr> {
+        self.write_int32(tag, ele as i32)
     }
-}
 
-impl TarsEncoderTrait<u32> for TarsEncoder {
-    fn put(&mut self, tag: u8, ele: &u32) -> Result<(), EncodeErr> {
-        self.put(tag, &(*ele as i64))
+    fn write_uint32(&mut self, tag: u8, ele: u32) -> Result<(), EncodeErr> {
+        self.write_int64(tag, ele as i64)
     }
-}
 
-impl TarsEncoderTrait<f32> for TarsEncoder {
-    fn put(&mut self, tag: u8, ele: &f32) -> Result<(), EncodeErr> {
-        self.put_head(tag, EnFloat)?;
-        self.check_maybe_resize(mem::size_of::<f32>());
-        ele.encode_into_tars(self)?;
-        Ok(())
-    }
-}
-
-impl TarsEncoderTrait<f64> for TarsEncoder {
-    fn put(&mut self, tag: u8, ele: &f64) -> Result<(), EncodeErr> {
-        self.put_head(tag, EnDouble)?;
-        self.check_maybe_resize(mem::size_of::<f64>());
-        ele.encode_into_tars(self)?;
-        Ok(())
-    }
-}
-
-impl TarsEncoderTrait<bool> for TarsEncoder {
-    fn put(&mut self, tag: u8, ele: &bool) -> Result<(), EncodeErr> {
-        if *ele {
-            self.put_head(tag, EnInt8)?;
-            self.check_maybe_resize(mem::size_of::<bool>());
-            ele.encode_into_tars(self)?;
-        } else {
+    fn write_float(&mut self, tag: u8, ele: f32) -> Result<(), EncodeErr> {
+        if ele == 0.0 {
             self.put_head(tag, EnZero)?;
+        } else {
+            self.put_head(tag, EnFloat)?;
+            self.check_maybe_resize(mem::size_of::<f32>());
+            self.buf.put_f32_be(ele)
         }
         Ok(())
     }
-}
-
-impl TarsEncoderTrait<String> for TarsEncoder {
-    fn put(&mut self, tag: u8, ele: &String) -> Result<(), EncodeErr> {
+    fn write_double(&mut self, tag: u8, ele: f64) -> Result<(), EncodeErr> {
+        if ele == 0.0 {
+            self.put_head(tag, EnZero)?;
+        } else {
+            self.put_head(tag, EnDouble)?;
+            self.check_maybe_resize(mem::size_of::<f64>());
+            self.buf.put_f64_be(ele)
+        }
+        Ok(())
+    }
+    fn write_string(&mut self, tag: u8, ele: &String) -> Result<(), EncodeErr> {
         let len = ele.len();
         self.check_maybe_resize(MAX_SIZE_LEN + len);
 
@@ -211,7 +195,7 @@ impl TarsEncoderTrait<String> for TarsEncoder {
             match u8::try_from(len) {
                 Ok(l) => {
                     self.buf.put_u8(l);
-                    ele.encode_into_tars(self)?;
+                    self.buf.put(ele);
                     Ok(())
                 }
                 Err(_) => Err(EncodeErr::ConvertU8Err),
@@ -220,246 +204,192 @@ impl TarsEncoderTrait<String> for TarsEncoder {
             // encode as string4
             self.put_head(tag, EnString4)?;
             self.buf.put_u32_be(len as u32);
-            ele.encode_into_tars(self)?;
+            self.buf.put(ele);
             Ok(())
         } else {
-            Err(EncodeErr::BufferTooBigErr)
+            Err(EncodeErr::DataTooBigErr)
+        }
+    }
+
+    fn write_bytes(&mut self, tag: u8, ele: &Bytes) -> Result<(), EncodeErr> {
+        let len = ele.len();
+        if len > i32::max_value() as usize {
+            Err(EncodeErr::DataTooBigErr)
+        } else {
+            self.put_head(tag, EnSimplelist)?;
+            self.put_head(0, EnInt8)?;
+            self.write_int32(0, len as i32)?;
+            self.buf.extend_from_slice(ele);
+            Ok(())
         }
     }
 }
 
-impl<K, V> TarsEncoderTrait<BTreeMap<K, V>> for TarsEncoder
+impl<K, V> TarsEncoderMapTrait<K, V> for TarsEncoder
 where
-    K: EncodeIntoTars + ClassName + Ord,
-    V: EncodeIntoTars + ClassName,
+    K: EncodeIntoTars + Ord,
+    V: EncodeIntoTars,
 {
-    fn put(&mut self, tag: u8, ele: &BTreeMap<K, V>) -> Result<(), EncodeErr> {
-        self.put_head(tag, EnMaps)?;
-        ele.encode_into_tars(self)?;
-        Ok(())
-    }
-}
-
-impl<T> TarsEncoderTrait<Vec<T>> for TarsEncoder
-where
-    T: EncodeIntoTars + ClassName,
-{
-    default fn put(&mut self, tag: u8, ele: &Vec<T>) -> Result<(), EncodeErr> {
-        self.put_head(tag, EnList)?;
-        ele.encode_into_tars(self)?;
-        Ok(())
-    }
-}
-
-impl TarsEncoderTrait<Vec<i8>> for TarsEncoder {
-    fn put(&mut self, tag: u8, ele: &Vec<i8>) -> Result<(), EncodeErr> {
-        self.put_head(tag, EnSimplelist)?;
-        self.put_head(0, EnInt8)?;
-        ele.encode_into_tars(self)?;
-        Ok(())
-    }
-}
-
-impl TarsEncoderTrait<Vec<bool>> for TarsEncoder {
-    fn put(&mut self, tag: u8, ele: &Vec<bool>) -> Result<(), EncodeErr> {
-        self.put_head(tag, EnSimplelist)?;
-        self.put_head(0, EnInt8)?;
-        ele.encode_into_tars(self)?;
-        Ok(())
-    }
-}
-
-impl TarsEncoderTrait<Bytes> for TarsEncoder {
-    fn put(&mut self, tag: u8, ele: &Bytes) -> Result<(), EncodeErr> {
-        self.put_head(tag, EnSimplelist)?;
-        self.put_head(0, EnInt8)?;
-        ele.encode_into_tars(self)?;
-        Ok(())
-    }
-}
-
-impl<T> TarsEncoderTrait<Option<T>> for TarsEncoder
-where
-    T: EncodeIntoTars + ClassName,
-{
-    fn put(&mut self, tag: u8, ele: &Option<T>) -> Result<(), EncodeErr> {
-        match ele {
-            None => Ok(()),
-            Some(e) => {
-                self.put(tag, e)?;
-                Ok(())
+    fn write_map(&mut self, tag: u8, ele: &BTreeMap<K, V>) -> Result<(), EncodeErr> {
+        let len = ele.len();
+        if len > i32::max_value() as usize {
+            Err(EncodeErr::DataTooBigErr)
+        } else {
+            self.put_head(tag, EnMaps)?;
+            self.write_int32(tag, len as i32)?;
+            for (key, value) in ele.iter() {
+                key.encode_into_tars(self, 0)?;
+                value.encode_into_tars(self, 1)?;
             }
+            Ok(())
+        }
+    }
+}
+
+impl<T> TarsEncodeListTrait<T> for TarsEncoder
+where
+    T: EncodeIntoTars,
+{
+    default fn write_list(&mut self, tag: u8, ele: &Vec<T>) -> Result<(), EncodeErr> {
+        let len = ele.len();
+        if len > i32::max_value() as usize {
+            Err(EncodeErr::DataTooBigErr)
+        } else {
+            self.put_head(tag, EnList)?;
+            self.write_int32(0, len as i32)?;
+            for ele in ele.into_iter() {
+                ele.encode_into_tars(self, 0)?;
+            }
+            Ok(())
+        }
+    }
+}
+
+impl TarsEncodeListTrait<i8> for TarsEncoder {
+    fn write_list(&mut self, tag: u8, ele: &Vec<i8>) -> Result<(), EncodeErr> {
+        let len = ele.len();
+        if len > i32::max_value() as usize {
+            Err(EncodeErr::DataTooBigErr)
+        } else {
+            self.put_head(tag, EnSimplelist)?;
+            self.put_head(0, EnInt8)?;
+            self.write_int32(0, len as i32)?;
+            self.buf
+                .extend_from_slice(unsafe { mem::transmute(ele.as_slice()) });
+            Ok(())
+        }
+    }
+}
+
+impl TarsEncodeListTrait<bool> for TarsEncoder {
+    fn write_list(&mut self, tag: u8, ele: &Vec<bool>) -> Result<(), EncodeErr> {
+        let len = ele.len();
+        if len > i32::max_value() as usize {
+            Err(EncodeErr::DataTooBigErr)
+        } else {
+            self.put_head(tag, EnSimplelist)?;
+            self.put_head(0, EnInt8)?;
+            self.write_int32(0, len as i32)?;
+            self.buf
+                .extend_from_slice(unsafe { mem::transmute(ele.as_slice()) });
+            Ok(())
         }
     }
 }
 
 // EncodeIntoTars Trait, 各类型将自身写入 TarsEncoder 中
 pub trait EncodeIntoTars {
-    fn encode_into_tars(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr>;
+    fn encode_into_tars(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr>;
 }
 
 impl EncodeIntoTars for i8 {
-    fn encode_into_tars(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
-        encoder.buf.put_i8(*self);
-        Ok(())
+    fn encode_into_tars(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
+        encoder.write_int8(tag, *self)
     }
 }
 
 impl EncodeIntoTars for i16 {
-    fn encode_into_tars(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
-        encoder.buf.put_i16_be(*self);
-        Ok(())
+    fn encode_into_tars(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
+        encoder.write_int16(tag, *self)
     }
 }
 
 impl EncodeIntoTars for i32 {
-    fn encode_into_tars(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
-        encoder.buf.put_i32_be(*self);
-        Ok(())
+    fn encode_into_tars(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
+        encoder.write_int32(tag, *self)
     }
 }
 
 impl EncodeIntoTars for i64 {
-    fn encode_into_tars(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
-        encoder.buf.put_i64_be(*self);
-        Ok(())
+    fn encode_into_tars(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
+        encoder.write_int64(tag, *self)
     }
 }
 
 impl EncodeIntoTars for u8 {
-    fn encode_into_tars(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
-        (*self as i16).encode_into_tars(encoder)
+    fn encode_into_tars(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
+        encoder.write_uint8(tag, *self)
     }
 }
 
 impl EncodeIntoTars for u16 {
-    fn encode_into_tars(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
-        (*self as i32).encode_into_tars(encoder)
+    fn encode_into_tars(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
+        encoder.write_uint16(tag, *self)
     }
 }
 
 impl EncodeIntoTars for u32 {
-    fn encode_into_tars(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
-        (*self as i16).encode_into_tars(encoder)
+    fn encode_into_tars(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
+        encoder.write_uint32(tag, *self)
     }
 }
 
 impl EncodeIntoTars for f32 {
-    fn encode_into_tars(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
-        encoder.buf.put_f32_be(*self);
-        Ok(())
+    fn encode_into_tars(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
+        encoder.write_float(tag, *self)
     }
 }
 
 impl EncodeIntoTars for f64 {
-    fn encode_into_tars(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
-        encoder.buf.put_f64_be(*self);
-        Ok(())
+    fn encode_into_tars(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
+        encoder.write_double(tag, *self)
     }
 }
 
 impl EncodeIntoTars for bool {
-    fn encode_into_tars(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
-        let value: i8 = if *self { 1 } else { 0 };
-        value.encode_into_tars(encoder)
+    fn encode_into_tars(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
+        encoder.write_boolean(tag, *self)
     }
 }
 
 impl EncodeIntoTars for String {
-    fn encode_into_tars(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
-        encoder.buf.put(self);
-        Ok(())
+    fn encode_into_tars(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
+        encoder.write_string(tag, self)
     }
 }
 
 impl<K, V> EncodeIntoTars for BTreeMap<K, V>
 where
-    K: EncodeIntoTars + ClassName + Ord,
-    V: EncodeIntoTars + ClassName,
+    K: EncodeIntoTars + Ord,
+    V: EncodeIntoTars,
 {
-    fn encode_into_tars(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
-        let mut inner_encoder = TarsEncoder::new();
-        for (key, value) in self.iter() {
-            inner_encoder.put(0, key)?;
-            inner_encoder.put(0, value)?;
-        }
-
-        if inner_encoder.len() > u32::max_value() as usize {
-            Err(EncodeErr::BufferTooBigErr)
-        } else {
-            encoder.check_maybe_resize(inner_encoder.len() + MAX_SIZE_LEN);
-            encoder.buf.put_u32_be(inner_encoder.len() as u32);
-            if inner_encoder.len() > 0 {
-                encoder.unsplit(inner_encoder);
-            }
-            Ok(())
-        }
+    fn encode_into_tars(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
+        encoder.write_map(tag, self)
     }
 }
 
 impl<T> EncodeIntoTars for Vec<T>
 where
-    T: EncodeIntoTars + ClassName,
+    T: EncodeIntoTars,
 {
-    default fn encode_into_tars(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
-        let mut inner_encoder = TarsEncoder::new();
-        for ele in self.into_iter() {
-            inner_encoder.put(0, ele).unwrap();
-        }
-        if inner_encoder.len() > u32::max_value() as usize {
-            Err(EncodeErr::BufferTooBigErr)
-        } else {
-            // TODO fix this ugly code
-            encoder.check_maybe_resize(inner_encoder.len() + MAX_SIZE_LEN);
-            encoder.buf.put_u32_be(inner_encoder.len() as u32);
-            if encoder.len() > 0 {
-                encoder.unsplit(inner_encoder);
-            }
-            Ok(())
-        }
-    }
-}
-
-impl EncodeIntoTars for Vec<i8> {
-    fn encode_into_tars(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
-        if self.len() > u32::max_value() as usize {
-            Err(EncodeErr::BufferTooBigErr)
-        } else {
-            encoder.buf.reserve(MAX_SIZE_LEN + self.len());
-            encoder.buf.put_u32_be(self.len() as u32);
-            encoder
-                .buf
-                .extend_from_slice(unsafe { mem::transmute(self.as_slice()) });
-            Ok(())
-        }
-    }
-}
-
-impl EncodeIntoTars for Vec<bool> {
-    fn encode_into_tars(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
-        if self.len() > u32::max_value() as usize {
-            Err(EncodeErr::BufferTooBigErr)
-        } else {
-            encoder.buf.reserve(MAX_SIZE_LEN + self.len());
-            encoder.buf.put_u32_be(self.len() as u32);
-            encoder
-                .buf
-                .extend_from_slice(unsafe { mem::transmute(self.as_slice()) });
-            Ok(())
-        }
+    fn encode_into_tars(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
+        encoder.write_list(tag, self)
     }
 }
 
 impl EncodeIntoTars for Bytes {
-    fn encode_into_tars(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
-        if self.len() > u32::max_value() as usize {
-            Err(EncodeErr::BufferTooBigErr)
-        } else {
-            encoder.buf.reserve(MAX_SIZE_LEN + self.len());
-            encoder.buf.put_u32_be(self.len() as u32);
-            encoder.buf.extend_from_slice(self);
-            Ok(())
-        }
+    fn encode_into_tars(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
+        encoder.write_bytes(tag, self)
     }
 }
 
@@ -468,157 +398,127 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_encode_option() {
-        let mut encoder = TarsEncoder::new();
-        let a: Option<i64> = Some(-1337);
-        let b: Option<i64> = None;
-        encoder.put(0, &a).unwrap();
-        encoder.put(0, &b).unwrap();
-
-        assert_eq!(&encoder.to_bytes(), &b"\x01\xfa\xc7"[..]);
-    }
-
-    #[test]
     fn test_encode_i8() {
         let mut encoder = TarsEncoder::new();
         let i0: i8 = -127;
-        encoder.put(0, &i0).unwrap();
-        assert_eq!(&encoder.to_bytes(), &b"\x00\x81"[..]);
-
-        let mut encoder = TarsEncoder::new();
-        let i1: i8 = 127;
-        encoder.put(14, &i1).unwrap();
-        assert_eq!(&encoder.to_bytes(), &b"\xe0\x7f"[..]);
-
-        let mut encoder = TarsEncoder::new();
-        let i2: i8 = -1;
-        encoder.put(255, &i2).unwrap();
-        assert_eq!(&encoder.to_bytes(), &b"\xf0\xff\xff"[..]);
-
-        let mut encoder = TarsEncoder::new();
         let i3: i8 = 0;
-        encoder.put(3, &i3).unwrap();
-        assert_eq!(&encoder.to_bytes(), &b"\x3c"[..]);
-    }
+        let i1: i8 = 127;
+        let i2: i8 = -1;
 
-    #[test]
-    fn test_encode_u8() {
-        let mut encoder = TarsEncoder::new();
-        let u0: u8 = 127;
-        encoder.put(0, &u0).unwrap();
-        assert_eq!(&encoder.to_bytes(), &b"\x00\x7f"[..]);
+        encoder.write_int8(0, i0).unwrap();
+        encoder.write_int8(14, i1).unwrap();
+        encoder.write_int8(255, i2).unwrap();
+        encoder.write_int8(3, i3).unwrap();
 
-        let mut encoder = TarsEncoder::new();
-        let u1: u8 = 255;
-        encoder.put(14, &u1).unwrap();
-        assert_eq!(&encoder.to_bytes(), &b"\xe1\x00\xff"[..]);
-
-        let mut encoder = TarsEncoder::new();
-        let u2: u8 = 0;
-        encoder.put(255, &u2).unwrap();
-        assert_eq!(&encoder.to_bytes(), &b"\xfc\xff"[..]);
+        assert_eq!(
+            &encoder.to_bytes(),
+            &b"\x00\x81\xe0\x7f\xf0\xff\xff\x3c"[..]
+        );
     }
 
     #[test]
     fn test_encode_i16() {
         let mut encoder = TarsEncoder::new();
         let i0: i16 = -32768;
-        encoder.put(0, &i0).unwrap();
-        assert_eq!(&encoder.to_bytes(), &b"\x01\x80\x00"[..]);
-
-        let mut encoder = TarsEncoder::new();
         let i1: i16 = -127;
-        encoder.put(15, &i1).unwrap();
-        assert_eq!(&encoder.to_bytes(), &b"\xf0\x0f\x81"[..]);
-
-        let mut encoder = TarsEncoder::new();
         let i2: i16 = 32767;
-        encoder.put(19, &i2).unwrap();
-        assert_eq!(&encoder.to_bytes(), &b"\xf1\x13\x7f\xff"[..]);
-    }
 
-    #[test]
-    fn test_encode_u16() {
-        let mut encoder = TarsEncoder::new();
-        let i0: u16 = 32768;
-        encoder.put(0, &i0).unwrap();
-        assert_eq!(&encoder.to_bytes(), &b"\x02\x00\x00\x80\x00"[..]);
+        encoder.write_int16(0, i0).unwrap();
+        encoder.write_int16(15, i1).unwrap();
+        encoder.write_int16(19, i2).unwrap();
 
-        let mut encoder = TarsEncoder::new();
-        let i1: u16 = 255;
-        encoder.put(15, &i1).unwrap();
-        assert_eq!(&encoder.to_bytes(), &b"\xf1\x0f\x00\xff"[..]);
-
-        let mut encoder = TarsEncoder::new();
-        let i2: u16 = 65535;
-        encoder.put(19, &i2).unwrap();
-        assert_eq!(&encoder.to_bytes(), &b"\xf2\x13\x00\x00\xff\xff"[..]);
+        assert_eq!(
+            &encoder.to_bytes(),
+            &b"\x01\x80\x00\xf0\x0f\x81\xf1\x13\x7f\xff"[..]
+        );
     }
 
     #[test]
     fn test_encode_i32() {
         let mut encoder = TarsEncoder::new();
+
         let i0: i32 = 90909;
-        encoder.put(0, &i0).unwrap();
-        assert_eq!(&encoder.to_bytes(), &b"\x02\x00\x01\x63\x1d"[..]);
-
-        let mut encoder = TarsEncoder::new();
         let i1: i32 = 255;
-        encoder.put(15, &i1).unwrap();
-        assert_eq!(&encoder.to_bytes(), &b"\xf1\x0f\x00\xff"[..]);
-
-        let mut encoder = TarsEncoder::new();
         let i2: i32 = -127;
-        encoder.put(14, &i2).unwrap();
-        assert_eq!(&encoder.to_bytes(), &b"\xe0\x81"[..]);
-
-        let mut encoder = TarsEncoder::new();
         let i3: i32 = -95234;
-        encoder.put(14, &i3).unwrap();
-        assert_eq!(&encoder.to_bytes(), &b"\xe2\xff\xfe\x8b\xfe"[..]);
+
+        encoder.write_int32(0, i0).unwrap();
+        encoder.write_int32(15, i1).unwrap();
+        encoder.write_int32(14, i2).unwrap();
+        encoder.write_int32(14, i3).unwrap();
+
+        assert_eq!(
+            &encoder.to_bytes(),
+            &b"\x02\x00\x01\x63\x1d\xf1\x0f\x00\xff\xe0\x81\xe2\xff\xfe\x8b\xfe"[..]
+        );
+    }
+
+    #[test]
+    fn test_encode_i64() {
+        let mut encoder = TarsEncoder::new();
+
+        let i0: i64 = -1;
+        let i1: i64 = -129;
+        let i2: i64 = -32769;
+        let i3: i64 = -2147483649;
+
+        encoder.write_int64(0, i0).unwrap();
+        encoder.write_int64(0, i1).unwrap();
+        encoder.write_int64(0, i2).unwrap();
+        encoder.write_int64(0, i3).unwrap();
+
+        assert_eq!(
+            &encoder.to_bytes(),
+            &b"\x00\xff\x01\xff\x7f\x02\xff\xff\x7f\xff\x03\xff\xff\xff\xff\x7f\xff\xff\xff"[..]
+        );
+    }
+
+    #[test]
+    fn test_encode_u8() {
+        let mut encoder = TarsEncoder::new();
+        let u0: u8 = 127;
+        let u1: u8 = 255;
+        let u2: u8 = 0;
+
+        encoder.write_uint8(0, u0).unwrap();
+        encoder.write_uint8(14, u1).unwrap();
+        encoder.write_uint8(255, u2).unwrap();
+
+        assert_eq!(&encoder.to_bytes(), &b"\x00\x7f\xe1\x00\xff\xfc\xff"[..]);
+    }
+
+    #[test]
+    fn test_encode_u16() {
+        let mut encoder = TarsEncoder::new();
+
+        let i0: u16 = 32768;
+        let i1: u16 = 255;
+        let i2: u16 = 65535;
+
+        encoder.write_uint16(0, i0).unwrap();
+        encoder.write_uint16(15, i1).unwrap();
+
+        encoder.write_uint16(19, i2).unwrap();
+        assert_eq!(
+            &encoder.to_bytes(),
+            &b"\x02\x00\x00\x80\x00\xf1\x0f\x00\xff\xf2\x13\x00\x00\xff\xff"[..]
+        );
     }
 
     #[test]
     fn test_encode_u32() {
         let mut encoder = TarsEncoder::new();
         let u0: u32 = 88888;
-        encoder.put(0, &u0).unwrap();
-        assert_eq!(&encoder.to_bytes(), &b"\x02\x00\x01\x5b\x38"[..]);
-
-        let mut encoder = TarsEncoder::new();
         let u1: u32 = 254;
-        encoder.put(14, &u1).unwrap();
-        assert_eq!(&encoder.to_bytes(), &b"\xe1\x00\xfe"[..]);
-
-        let mut encoder = TarsEncoder::new();
         let u2: u32 = 256;
-        encoder.put(14, &u2).unwrap();
-        assert_eq!(&encoder.to_bytes(), &b"\xe1\x01\x00"[..]);
-    }
 
-    #[test]
-    fn test_encode_i64() {
-        let mut encoder = TarsEncoder::new();
-        let i0: i64 = -1;
-        encoder.put(0, &i0).unwrap();
-        assert_eq!(&encoder.to_bytes(), &b"\x00\xff"[..]);
+        encoder.write_uint32(0, u0).unwrap();
+        encoder.write_uint32(14, u1).unwrap();
+        encoder.write_uint32(14, u2).unwrap();
 
-        let mut encoder = TarsEncoder::new();
-        let i1: i64 = -129;
-        encoder.put(0, &i1).unwrap();
-        assert_eq!(&encoder.to_bytes(), &b"\x01\xff\x7f"[..]);
-
-        let mut encoder = TarsEncoder::new();
-        let i2: i64 = -32769;
-        encoder.put(0, &i2).unwrap();
-        assert_eq!(&encoder.to_bytes(), &b"\x02\xff\xff\x7f\xff"[..]);
-
-        let mut encoder = TarsEncoder::new();
-        let i3: i64 = -2147483649;
-        encoder.put(0, &i3).unwrap();
         assert_eq!(
             &encoder.to_bytes(),
-            &b"\x03\xff\xff\xff\xff\x7f\xff\xff\xff"[..]
+            &b"\x02\x00\x01\x5b\x38\xe1\x00\xfe\xe1\x01\x00"[..]
         );
     }
 
@@ -626,7 +526,7 @@ mod tests {
     fn test_encode_f32() {
         let mut encoder = TarsEncoder::new();
         let f1: f32 = 0.1472;
-        encoder.put(0, &f1).unwrap();
+        encoder.write_float(0, f1).unwrap();
         assert_eq!(&encoder.to_bytes(), &b"\x04\x3e\x16\xbb\x99"[..]);
     }
 
@@ -634,7 +534,7 @@ mod tests {
     fn test_encode_f64() {
         let mut encoder = TarsEncoder::new();
         let f1: f64 = 0.14723333;
-        encoder.put(0, &f1).unwrap();
+        encoder.write_double(0, f1).unwrap();
         assert_eq!(
             &encoder.to_bytes(),
             &b"\x05\x3f\xc2\xd8\x8a\xb0\x9d\x97\x2a"[..]
@@ -644,8 +544,8 @@ mod tests {
     #[test]
     fn test_encode_bool() {
         let mut encoder = TarsEncoder::new();
-        encoder.put(0, &false).unwrap();
-        encoder.put(1, &true).unwrap();
+        encoder.write_boolean(0, false).unwrap();
+        encoder.write_boolean(1, true).unwrap();
         assert_eq!(&encoder.to_bytes(), &b"\x0c\x10\x01"[..]);
     }
 
@@ -654,7 +554,7 @@ mod tests {
         let mut encoder = TarsEncoder::new();
         let s: String = "hello wrold!".to_string();
         let expect_buf = "\x06\x0c".to_string() + &s;
-        encoder.put(0, &s).unwrap();
+        encoder.write_string(0, &s).unwrap();
         assert_eq!(&encoder.to_bytes(), &expect_buf);
 
         let mut encoder = TarsEncoder::new();
@@ -663,22 +563,8 @@ mod tests {
             s1.push('z');
         }
         let expect_buf = "\x07\x00\x0f\x7f\x7f".to_string() + &s1;
-        encoder.put(0, &s1).unwrap();
+        encoder.write_string(0, &s1).unwrap();
         assert_eq!(&encoder.to_bytes(), &expect_buf);
-    }
-
-    #[test]
-    fn test_encode_map() {
-        let mut map: BTreeMap<String, i32> = BTreeMap::new();
-        map.insert("hello".to_string(), 32);
-        map.insert("world".to_string(), 42);
-
-        let mut encoder = TarsEncoder::new();
-        encoder.put(0, &map).unwrap();
-        assert_eq!(
-            &encoder.to_bytes(),
-            &b"\x08\0\0\0\x12\x06\x05hello\x00\x20\x06\x05world\x00\x2a"[..]
-        );
     }
 
     #[test]
@@ -688,9 +574,9 @@ mod tests {
             v2.push(-127);
         }
         let mut encoder = TarsEncoder::new();
-        encoder.put(0, &v2).unwrap();
-        let mut header_v: Vec<u8> = Vec::from(&b"\x0d\x00\x00\x0f\x7f\x7f"[..]);
-        header_v.extend_from_slice(unsafe { mem::transmute(&v2[..]) });
+        encoder.write_list(0, &v2).unwrap();
+        let mut header_v: Vec<u8> = Vec::from(&b"\x0d\x00\x02\x00\x0f\x7f\x7f"[..]);
+        header_v.extend_from_slice(unsafe { mem::transmute(v2.as_slice()) });
         assert_eq!(&encoder.to_bytes(), &header_v);
 
         let mut v3: Vec<bool> = Vec::with_capacity(0xf6f7f);
@@ -701,9 +587,9 @@ mod tests {
         }
 
         let mut encoder = TarsEncoder::new();
-        encoder.put(0, &v3).unwrap();
-        let mut header_v: Vec<u8> = Vec::from(&b"\x0d\x00\x00\x0f\x6f\x7f"[..]);
-        header_v.extend_from_slice(unsafe { mem::transmute(&v3[..]) });
+        encoder.write_list(0, &v3).unwrap();
+        let mut header_v: Vec<u8> = Vec::from(&b"\x0d\x00\x02\x00\x0f\x6f\x7f"[..]);
+        header_v.extend_from_slice(unsafe { mem::transmute(v3.as_slice()) });
         assert_eq!(&encoder.to_bytes(), &header_v);
 
         let mut v4: Vec<String> = Vec::with_capacity(0xf6f7e);
@@ -718,24 +604,36 @@ mod tests {
         }
 
         let mut encoder = TarsEncoder::new();
-        encoder.put(10, &v4).unwrap();
+        encoder.write_list(10, &v4).unwrap();
         let buf = encoder.to_bytes();
-        assert_eq!(&buf[0..1], &b"\xa9"[..]);
-        let len_in_u8: [u8; 4] = [buf[1], buf[2], buf[3], buf[4]];
-        let len: u32 = u32::from_be(unsafe { mem::transmute(len_in_u8) });
-        // (header len + string size + string in bytes)
-        let expect_len = (1 + 4 + str4.len()) * times + (1 + 1 + str1.len()) * times;
-        assert_eq!(len, expect_len as u32);
+        assert_eq!(&buf[0..2], &b"\xa9\x02"[..]);
+        let len_in_u8: [u8; 4] = [buf[2], buf[3], buf[4], buf[5]];
+        let len: i32 = i32::from_be(unsafe { mem::transmute(len_in_u8) });
+        assert_eq!(len, v4.len() as i32);
+    }
+
+    #[test]
+    fn test_encode_map() {
+        let mut map: BTreeMap<String, i32> = BTreeMap::new();
+        map.insert("hello".to_string(), 32);
+        map.insert("world".to_string(), 42);
+
+        let mut encoder = TarsEncoder::new();
+        encoder.write_map(0, &map).unwrap();
+        assert_eq!(
+            &encoder.to_bytes(),
+            &b"\x08\x00\x02\x06\x05hello\x10\x20\x06\x05world\x10\x2a"[..]
+        );
     }
 
     #[test]
     fn test_encode_bytes() {
         let b = Bytes::from(&b"hello world!"[..]);
         let mut encoder = TarsEncoder::new();
-        encoder.put(9, &b).unwrap();
+        encoder.write_bytes(9, &b).unwrap();
         assert_eq!(
             &encoder.to_bytes(),
-            &b"\x9d\x00\x00\x00\x00\x0chello world!"[..]
+            &b"\x9d\x00\x00\x0chello world!"[..]
         );
     }
 }

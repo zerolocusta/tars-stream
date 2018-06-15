@@ -46,8 +46,8 @@ quick_error!{
         ConvertU8Err{
             description("encoder: cannot convert to u8")
         }
-        BufferTooBigErr {
-            description("encoder: BufferTooBigErr len bigger than 4294967295 bytes")
+        DataTooBigErr {
+            description("encoder: data bigger than 4294967295 bytes")
         }
         UnknownTarsTypeErr{
             description("encoder: unknown tars type")

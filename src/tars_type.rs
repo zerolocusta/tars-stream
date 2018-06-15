@@ -74,15 +74,11 @@ impl From<u8> for ProtocolVersion {
 // for tup encoding/decoding
 pub trait ClassName {
     fn _class_name() -> String;
-    fn _type_name() -> &'static str;
 }
 
 impl ClassName for bool {
     fn _class_name() -> String {
         String::from("bool")
-    }
-    fn _type_name() -> &'static str {
-        "bool"
     }
 }
 
@@ -90,17 +86,11 @@ impl ClassName for i8 {
     fn _class_name() -> String {
         String::from("char")
     }
-    fn _type_name() -> &'static str {
-        "char"
-    }
 }
 
 impl ClassName for i16 {
     fn _class_name() -> String {
         String::from("short")
-    }
-    fn _type_name() -> &'static str {
-        "short"
     }
 }
 
@@ -108,17 +98,11 @@ impl ClassName for i32 {
     fn _class_name() -> String {
         String::from("int32")
     }
-    fn _type_name() -> &'static str {
-        "int32"
-    }
 }
 
 impl ClassName for i64 {
     fn _class_name() -> String {
         String::from("int64")
-    }
-    fn _type_name() -> &'static str {
-        "int64"
     }
 }
 
@@ -126,17 +110,11 @@ impl ClassName for u8 {
     fn _class_name() -> String {
         String::from("short")
     }
-    fn _type_name() -> &'static str {
-        "short"
-    }
 }
 
 impl ClassName for u16 {
     fn _class_name() -> String {
         String::from("int32")
-    }
-    fn _type_name() -> &'static str {
-        "int32"
     }
 }
 
@@ -144,17 +122,11 @@ impl ClassName for u32 {
     fn _class_name() -> String {
         String::from("int64")
     }
-    fn _type_name() -> &'static str {
-        "int64"
-    }
 }
 
 impl ClassName for f32 {
     fn _class_name() -> String {
         String::from("float")
-    }
-    fn _type_name() -> &'static str {
-        "float"
     }
 }
 
@@ -162,17 +134,11 @@ impl ClassName for f64 {
     fn _class_name() -> String {
         String::from("double")
     }
-    fn _type_name() -> &'static str {
-        "double"
-    }
 }
 
 impl ClassName for String {
     fn _class_name() -> String {
         String::from("string")
-    }
-    fn _type_name() -> &'static str {
-        "string"
     }
 }
 
@@ -188,9 +154,6 @@ where
             + &V::_class_name()
             + &String::from(">")
     }
-    fn _type_name() -> &'static str {
-        "map"
-    }
 }
 
 impl<T> ClassName for Vec<T>
@@ -198,18 +161,12 @@ where
     T: ClassName,
 {
     fn _class_name() -> String {
-        String::from("list<") + &T::_class_name() + &String::from(">")
-    }
-    fn _type_name() -> &'static str {
-        "list"
+        String::from("List<") + &T::_class_name() + &String::from(">")
     }
 }
 
 impl ClassName for Bytes {
     fn _class_name() -> String {
         String::from("list<byte>")
-    }
-    fn _type_name() -> &'static str {
-        "list"
     }
 }
