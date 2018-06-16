@@ -243,7 +243,7 @@ where
             Err(EncodeErr::DataTooBigErr)
         } else {
             self.put_head(tag, EnMaps)?;
-            self.write_int32(tag, len as i32)?;
+            self.write_int32(0, len as i32)?;
             for (key, value) in ele.iter() {
                 key.encode_into_tars(self, 0)?;
                 value.encode_into_tars(self, 1)?;
@@ -311,7 +311,7 @@ where
     fn write_struct(&mut self, tag: u8, ele: &T) -> Result<(), EncodeErr> {
         self.put_head(tag, EnStructBegin)?;
         ele.struct_encode_into_tars(self)?;
-        self.put_head(tag, EnStructEnd)
+        self.put_head(0, EnStructEnd)
     }
 }
 

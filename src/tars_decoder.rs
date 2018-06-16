@@ -11,6 +11,7 @@ use tars_type::TarsTypeMark::*;
 pub struct TarsDecoder {
     buf: Bytes,
     pos: AtomicUsize,
+    is_read_tag: bool,
 }
 #[derive(Debug)]
 pub struct Head {
@@ -44,6 +45,7 @@ impl<'a> Drop for DecoderPositionGuard<'a> {
         if !self.decoder.has_remaining() {
             // 无剩余二进制流，可能是 optional field 读不到tag导致
             // 即使是二进制流中最后一个元素，rollback 无影响
+            println!("rollbakc");
             self.rollback()
         }
     }
@@ -54,6 +56,7 @@ impl TarsDecoder {
         TarsDecoder {
             buf: Bytes::new(),
             pos: AtomicUsize::new(0),
+            is_read_tag: false,
         }
     }
 
@@ -103,6 +106,10 @@ impl TarsDecoder {
         }
     }
 
+    pub fn is_success_read_tag(&self) -> bool {
+        self.is_read_tag == true
+    }
+
     fn take_then_advance(&self, size: usize) -> Result<Bytes, DecodeErr> {
         if self.remaining() < size {
             Err(DecodeErr::NoEnoughDataErr)
@@ -118,7 +125,8 @@ impl TarsDecoder {
         let mut result: Option<Head> = None;
         while self.has_remaining() {
             let head = self.take_head()?;
-            if head.tag == tag {
+            println!("{:?} | {:?}", head, self.remaining());
+            if head.tag == tag && head.tars_type != EnStructEnd {
                 result = Some(head);
                 break;
             } else {
@@ -230,6 +238,7 @@ impl<'a> From<&'a [u8]> for TarsDecoder {
         TarsDecoder {
             buf: b,
             pos: AtomicUsize::new(0),
+            is_read_tag: false,
         }
     }
 }
@@ -240,6 +249,7 @@ impl<'a> From<&'a Bytes> for TarsDecoder {
         TarsDecoder {
             buf: b,
             pos: AtomicUsize::new(0),
+            is_read_tag: false,
         }
     }
 }
@@ -250,6 +260,7 @@ impl From<Vec<u8>> for TarsDecoder {
         TarsDecoder {
             buf: b,
             pos: AtomicUsize::new(0),
+            is_read_tag: false,
         }
     }
 }
@@ -359,6 +370,7 @@ pub trait StrcutDecodeFromTars<T> {
 
 impl TarsDecodeSimpleTrait for TarsDecoder {
     fn read_int8(&self, tag: u8, is_required: bool, default_value: i8) -> Result<i8, DecodeErr> {
+        println!("1");
         let _g = DecoderPositionGuard::from(self);
 
         match self.skip_to_tag(tag) {
@@ -388,6 +400,7 @@ impl TarsDecodeSimpleTrait for TarsDecoder {
     }
 
     fn read_int16(&self, tag: u8, is_required: bool, default_value: i16) -> Result<i16, DecodeErr> {
+        println!("2");
         let _g = DecoderPositionGuard::from(self);
         match self.skip_to_tag(tag) {
             Ok(head) => match head.tars_type {
@@ -409,6 +422,7 @@ impl TarsDecodeSimpleTrait for TarsDecoder {
     }
 
     fn read_int32(&self, tag: u8, is_required: bool, default_value: i32) -> Result<i32, DecodeErr> {
+        println!("3");
         let _g = DecoderPositionGuard::from(self);
         match self.skip_to_tag(tag) {
             Ok(head) => match head.tars_type {
@@ -434,6 +448,7 @@ impl TarsDecodeSimpleTrait for TarsDecoder {
     }
 
     fn read_int64(&self, tag: u8, is_required: bool, default_value: i64) -> Result<i64, DecodeErr> {
+        println!("4");
         let _g = DecoderPositionGuard::from(self);
         match self.skip_to_tag(tag) {
             Ok(head) => match head.tars_type {
@@ -488,6 +503,7 @@ impl TarsDecodeSimpleTrait for TarsDecoder {
     }
 
     fn read_float(&self, tag: u8, is_required: bool, default_value: f32) -> Result<f32, DecodeErr> {
+        println!("5");
         let _g = DecoderPositionGuard::from(self);
         match self.skip_to_tag(tag) {
             Ok(head) => match head.tars_type {
@@ -510,6 +526,7 @@ impl TarsDecodeSimpleTrait for TarsDecoder {
         is_required: bool,
         default_value: f64,
     ) -> Result<f64, DecodeErr> {
+        println!("6");
         let _g = DecoderPositionGuard::from(self);
         match self.skip_to_tag(tag) {
             Ok(head) => match head.tars_type {
@@ -532,6 +549,7 @@ impl TarsDecodeSimpleTrait for TarsDecoder {
         is_required: bool,
         default_value: String,
     ) -> Result<String, DecodeErr> {
+        println!("7");
         let _g = DecoderPositionGuard::from(self);
         match self.skip_to_tag(tag) {
             Ok(head) => match head.tars_type {
@@ -563,13 +581,14 @@ impl TarsDecodeSimpleTrait for TarsDecoder {
         is_required: bool,
         default_value: Bytes,
     ) -> Result<Bytes, DecodeErr> {
+        println!("8");
         let _g = DecoderPositionGuard::from(self);
         match self.skip_to_tag(tag) {
             Ok(head) => match head.tars_type {
                 EnSimplelist => {
                     let head = self.take_head()?;
                     match head.tars_type {
-                        EnInt8 => {
+                        EnInt8 | EnInt16 | EnInt32 => {
                             let size = self.read_int32(0, true, 0)? as usize;
                             self.take_then_advance(size)
                         }
@@ -595,6 +614,7 @@ where
         is_required: bool,
         default_value: Vec<T>,
     ) -> Result<Vec<T>, DecodeErr> {
+        println!("9");
         let _g = DecoderPositionGuard::from(self);
         match self.skip_to_tag(tag) {
             Ok(head) => match head.tars_type {
@@ -623,13 +643,14 @@ impl TarsDecodeListTrait<i8> for TarsDecoder {
         is_required: bool,
         default_value: Vec<i8>,
     ) -> Result<Vec<i8>, DecodeErr> {
+        println!("10");
         let _g = DecoderPositionGuard::from(self);
         match self.skip_to_tag(tag) {
             Ok(head) => match head.tars_type {
                 EnSimplelist => {
                     let head = self.take_head()?;
                     match head.tars_type {
-                        EnInt8 => {
+                        EnInt8 | EnInt16 | EnInt32 => {
                             let size = self.read_int32(0, true, 0)? as usize;
                             Ok(unsafe { mem::transmute(self.take_then_advance(size)?.to_vec()) })
                         }
@@ -652,13 +673,14 @@ impl TarsDecodeListTrait<bool> for TarsDecoder {
         is_required: bool,
         default_value: Vec<bool>,
     ) -> Result<Vec<bool>, DecodeErr> {
+        println!("11");
         let _g = DecoderPositionGuard::from(self);
         match self.skip_to_tag(tag) {
             Ok(head) => match head.tars_type {
                 EnSimplelist => {
                     let head = self.take_head()?;
                     match head.tars_type {
-                        EnInt8 => {
+                        EnInt8 | EnInt16 | EnInt32 => {
                             let size = self.read_int32(0, true, 0)? as usize;
                             Ok(unsafe { mem::transmute(self.take_then_advance(size)?.to_vec()) })
                         }
@@ -685,6 +707,7 @@ where
         is_required: bool,
         default_value: BTreeMap<K, V>,
     ) -> Result<BTreeMap<K, V>, DecodeErr> {
+        println!("12");
         let _g = DecoderPositionGuard::from(self);
         match self.skip_to_tag(tag) {
             Ok(head) => match head.tars_type {
@@ -712,6 +735,7 @@ where
     T: StrcutDecodeFromTars<T>,
 {
     fn read_struct(&self, tag: u8, is_required: bool, default_value: T) -> Result<T, DecodeErr> {
+        println!("13");
         let _g = DecoderPositionGuard::from(self);
         match self.skip_to_tag(tag) {
             Ok(head) => match head.tars_type {

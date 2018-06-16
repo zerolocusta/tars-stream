@@ -1,7 +1,7 @@
 use bytes::Bytes;
 use std::collections::BTreeMap;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum TarsTypeMark {
     EnInt8 = 0,
     EnInt16 = 1,

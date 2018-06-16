@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use tars_stream::prelude::*;
 use uuid::Uuid;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, PartialOrd)]
 struct TestStruct {
     a: i8,       // tag 0
     b: u16,      // tag 1
@@ -136,238 +136,255 @@ fn test_encode_decode_struct() {
     assert_eq!(de_ts, ts);
 }
 
-// #[derive(Clone, Debug, PartialEq)]
-// enum TestEnum {
-//     A = -32,
-//     B = 1337,
-// }
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum TestEnum {
+    A = -32,
+    B = 1337,
+}
 
-// impl DecodeFromTars for TestEnum {
-//     fn decode_from_tars(b: &Bytes) -> Result<Self, DecodeErr> {
-//         match i32::decode_from_tars(b)? {
-//             -32 => Ok(TestEnum::A),
-//             1337 => Ok(TestEnum::B),
-//             _ => Err(DecodeErr::InvalidEnumValue),
-//         }
-//     }
-// }
+impl DecodeFromTars for TestEnum {
+    fn decode_from_tars(decoder: &TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
+        match decoder.read_int32(tag, true, -32)? {
+            -32 => Ok(TestEnum::A),
+            1337 => Ok(TestEnum::B),
+            _ => Err(DecodeErr::InvalidEnumValue),
+        }
+    }
+}
 
-// impl EncodeIntoTars for TestEnum {
-//     fn encode_into_tars(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
-//         encoder.write_int32(tag, ele)
-//     }
-// }
+impl EncodeIntoTars for TestEnum {
+    fn encode_into_tars(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
+        encoder.write_int32(tag, (self.clone()) as i32)
+    }
+}
 
-// impl ClassName for TestEnum {
-//     fn _class_name() -> String {
-//         String::from("TestEnum")
-//     }
-// }
+impl ClassName for TestEnum {
+    fn _class_name() -> String {
+        String::from("TarsStreamTest.TestEnum")
+    }
+}
 
-// #[derive(Clone, Debug, PartialEq)]
-// struct TestStruct2 {
-//     f1: f32, // 0
-//     f2: f64, // 1
+#[derive(Clone, Debug, PartialEq, PartialOrd)]
+struct TestStruct2 {
+    f1: f32, // 0
+    f2: f64, // 1
 
-//     i1: i8,  // 2
-//     i2: i16, // 3
-//     i3: i32, // 4
-//     i4: i64, // 5
+    i1: i8,  // 2
+    i2: i16, // 3
+    i3: i32, // 4
+    i4: i64, // 5
 
-//     u1: u8,  // 6
-//     u2: u16, // 7
-//     u3: u32, // 8
+    u1: u8,  // 6
+    u2: u16, // 7
+    u3: u32, // 8
 
-//     b: bool, // 10
+    b: bool, // 10
 
-//     s: TestStruct,               // 11
-//     v: Vec<TestStruct>,          // 12
-//     m: BTreeMap<String, String>, // 13
-//     y: Option<u8>,               // 14
-//     z: Option<TestStruct>,       // 15
-//     x: Bytes,
-//     e: Vec<TestEnum>,
-// }
+    s: TestStruct,               // 11
+    v: Vec<TestStruct>,          // 12
+    m: BTreeMap<String, String>, // 13
+    y: u8,                       // 14
+    z: TestStruct,               // 15
+    x: Bytes,
+    e: Vec<TestEnum>,
+}
 
-// impl TestStruct2 {
-//     pub fn new() -> Self {
-//         TestStruct2 {
-//             f1: 0.0,
-//             f2: 0.0,
+impl TestStruct2 {
+    pub fn new() -> Self {
+        TestStruct2 {
+            f1: 0.0,
+            f2: 0.0,
 
-//             i1: 0, // 2
-//             i2: 0, // 3
-//             i3: 0, // 4
-//             i4: 0, // 5
+            i1: 0, // 2
+            i2: 0, // 3
+            i3: 0, // 4
+            i4: 0, // 5
 
-//             u1: 0, // 6
-//             u2: 0, // 7
-//             u3: 0, // 8
+            u1: 0, // 6
+            u2: 0, // 7
+            u3: 0, // 8
 
-//             b: false,
+            b: false,
 
-//             s: TestStruct::new(),
-//             v: vec![],
-//             m: BTreeMap::new(),
-//             y: None,
-//             z: None,
-//             x: Bytes::new(),
-//             e: vec![],
-//         }
-//     }
-// }
+            s: TestStruct::new(),
+            v: vec![],
+            m: BTreeMap::new(),
+            y: 0,
+            z: TestStruct::new(),
+            x: Bytes::new(),
+            e: vec![],
+        }
+    }
+}
 
-// impl DecodeFromTars for TestStruct2 {
-//     fn decode_from_tars(b: &Bytes) -> Result<Self, DecodeErr> {
-//         let mut de = TarsDecoder::from(b);
-//         let f1 = de.get(0)?;
-//         let f2 = de.get(1)?;
+impl DecodeFromTars for TestStruct2 {
+    fn decode_from_tars(decoder: &TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
+        decoder.read_struct(tag, true, Self::new())
+    }
+}
 
-//         let i1 = de.get(2)?;
-//         let i2 = de.get(3)?;
-//         let i3 = de.get(4)?;
-//         let i4 = de.get(5)?;
+impl StrcutDecodeFromTars<TestStruct2> for TestStruct2 {
+    fn struct_decode_from_tars(decoder: &TarsDecoder) -> Result<TestStruct2, DecodeErr> {
+        let f1 = decoder.read_float(0, true, 0.0)?;
+        let f2 = decoder.read_double(1, true, 0.0)?;
 
-//         let u1 = de.get(6)?;
-//         let u2 = de.get(7)?;
-//         let u3 = de.get(8)?;
+        let i1 = decoder.read_int8(2, true, 0)?;
+        let i2 = decoder.read_int16(3, true, 0)?;
+        let i3 = decoder.read_int32(4, true, 0)?;
+        let i4 = decoder.read_int64(5, true, 0)?;
 
-//         let b = de.get(10)?;
+        let u1 = decoder.read_uint8(6, true, 0)?;
+        let u2 = decoder.read_uint16(7, true, 0)?;
+        let u3 = decoder.read_uint32(8, true, 0)?;
 
-//         let s = de.get(11)?;
-//         let v = de.get(12)?;
-//         let m = de.get(13)?;
-//         let y = de.get(14)?;
-//         let z = de.get(15)?;
-//         let x = de.get(16)?;
-//         let e = de.get(17)?;
+        let b = decoder.read_boolean(9, true, false)?;
 
-//         Ok(TestStruct2 {
-//             f1,
-//             f2,
-//             i1,
-//             i2,
-//             i3,
-//             i4,
-//             u1,
-//             u2,
-//             u3,
-//             b,
-//             s,
-//             v,
-//             m,
-//             y,
-//             z,
-//             x,
-//             e,
-//         })
-//     }
-// }
+        let s = decoder.read_struct(10, true, TestStruct::new())?;
+        let v = decoder.read_list(11, true, vec![])?;
+        let m = decoder.read_map(12, true, BTreeMap::new())?;
+        let y = decoder.read_uint8(13, false, 0)?;
+        let z = decoder.read_struct(14, false, TestStruct::new())?;
+        let x = decoder.read_bytes(15, true, Bytes::new())?;
+        let e = decoder.read_list(16, true, vec![])?;
 
-// impl EncodeIntoTars for TestStruct2 {
-//     fn encode_into_tars(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
-//         encoder.put(0, &self.f1)?;
-//         encoder.put(1, &self.f2)?;
+        Ok(TestStruct2 {
+            f1,
+            f2,
+            i1,
+            i2,
+            i3,
+            i4,
+            u1,
+            u2,
+            u3,
+            b,
+            s,
+            v,
+            m,
+            y,
+            z,
+            x,
+            e,
+        })
+    }
+}
 
-//         encoder.put(2, &self.i1)?;
-//         encoder.put(3, &self.i2)?;
-//         encoder.put(4, &self.i3)?;
-//         encoder.put(5, &self.i4)?;
+impl EncodeIntoTars for TestStruct2 {
+    fn encode_into_tars(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
+        encoder.write_struct(tag, self)
+    }
+}
 
-//         encoder.put(6, &self.u1)?;
-//         encoder.put(7, &self.u2)?;
-//         encoder.put(8, &self.u3)?;
+impl StructEncodeIntoTars for TestStruct2 {
+    fn struct_encode_into_tars(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
+        encoder.write_float(0, self.f1)?;
+        encoder.write_double(1, self.f2)?;
 
-//         encoder.put(10, &self.b)?;
-//         encoder.put(11, &self.s)?;
-//         encoder.put(12, &self.v)?;
-//         encoder.put(13, &self.m)?;
-//         encoder.put(14, &self.y)?;
-//         encoder.put(15, &self.z)?;
-//         encoder.put(16, &self.x)?;
-//         encoder.put(17, &self.e)?;
+        encoder.write_int8(2, self.i1)?;
+        encoder.write_int16(3, self.i2)?;
+        encoder.write_int32(4, self.i3)?;
+        encoder.write_int64(5, self.i4)?;
 
-//         Ok(())
-//     }
-// }
+        encoder.write_uint8(6, self.u1)?;
+        encoder.write_uint16(7, self.u2)?;
+        encoder.write_uint32(8, self.u3)?;
 
-// impl ClassName for TestStruct2 {
-//     fn _class_name() -> String {
-//         String::from("TestStruct2")
-//     }
-// }
+        encoder.write_boolean(9, self.b)?;
+        encoder.write_struct(10, &self.s)?;
+        encoder.write_list(11, &self.v)?;
+        encoder.write_map(12, &self.m)?;
+        encoder.write_uint8(13, self.y)?;
+        encoder.write_struct(14, &self.z)?;
+        encoder.write_bytes(15, &self.x)?;
+        encoder.write_list(16, &self.e)?;
 
-// #[test]
-// fn test_encode_decode_struct2() {
-//     let mut encoder = TarsEncoder::new();
+        Ok(())
+    }
+}
 
-//     let mut ts = TestStruct2::new();
+impl ClassName for TestStruct2 {
+    fn _class_name() -> String {
+        String::from("TestStruct2")
+    }
+}
 
-//     ts.encode_into_tars(&mut encoder).unwrap();
+#[test]
+fn test_encode_decode_struct2() {
+    let mut encoder = TarsEncoder::new();
 
-//     let de_ts = TestStruct2::decode_from_tars(&encoder.to_bytes()).unwrap();
+    let mut ts = TestStruct2::new();
 
-//     assert_eq!(de_ts, ts);
+    ts.encode_into_tars(&mut encoder, 0).unwrap();
 
-//     // case 2
+    let decoder = TarsDecoder::from(&encoder.to_bytes());
 
-//     ts.f1 = random();
-//     ts.f2 = random();
+    let de_ts = TestStruct2::decode_from_tars(&decoder, 0).unwrap();
 
-//     ts.i1 = random();
-//     ts.i2 = random();
-//     ts.i3 = random();
-//     ts.i4 = random();
+    assert_eq!(de_ts, ts);
 
-//     ts.u1 = random();
-//     ts.u2 = random();
-//     ts.u3 = random();
+    // case 2
 
-//     ts.b = random();
+    ts.f1 = random();
+    ts.f2 = random();
 
-//     ts.s = TestStruct::random_for_test();
+    ts.i1 = random();
+    ts.i2 = random();
+    ts.i3 = random();
+    ts.i4 = random();
 
-//     let v_len: u8 = random();
-//     for _ in 0..v_len {
-//         ts.v.push(TestStruct::random_for_test());
-//     }
+    ts.u1 = random();
+    ts.u2 = random();
+    ts.u3 = random();
 
-//     let m_len: u8 = random();
-//     for _ in 0..m_len {
-//         ts.m
-//             .insert(Uuid::new_v4().to_string(), Uuid::new_v4().to_string());
-//     }
+    ts.b = random();
 
-//     ts.y = Some(random());
-//     ts.z = Some(TestStruct::random_for_test());
-//     ts.x = Bytes::from(ts.s.v1.as_slice());
+    ts.s = TestStruct::random_for_test();
 
-//     let e_len: u8 = random();
-//     for _ in 0..e_len {
-//         let b: bool = random();
-//         if b {
-//             ts.e.push(TestEnum::A);
-//         } else {
-//             ts.e.push(TestEnum::B);
-//         }
-//     }
-//     let mut encoder = TarsEncoder::new();
+    let v_len: u8 = random();
+    for _ in 0..v_len {
+        ts.v.push(TestStruct::random_for_test());
+    }
 
-//     ts.encode_into_tars(&mut encoder).unwrap();
+    let m_len: u8 = random();
+    for _ in 0..m_len {
+        ts.m
+            .insert(Uuid::new_v4().to_string(), Uuid::new_v4().to_string());
+    }
 
-//     let de_ts = TestStruct2::decode_from_tars(&encoder.to_bytes()).unwrap();
+    ts.y = random();
+    ts.z = TestStruct::random_for_test();
+    ts.x = Bytes::from(ts.s.v1.as_slice());
 
-//     assert_eq!(de_ts, ts);
+    let e_len: u8 = random();
+    for _ in 0..e_len {
+        let b: bool = random();
+        if b {
+            ts.e.push(TestEnum::A);
+        } else {
+            ts.e.push(TestEnum::B);
+        }
+    }
+    let mut encoder = TarsEncoder::new();
 
-//     // case 3
+    ts.encode_into_tars(&mut encoder, 0).unwrap();
 
-//     ts.y = None;
+    let decoder = TarsDecoder::from(&encoder.to_bytes());
 
-//     let mut encoder = TarsEncoder::new();
+    let de_ts = TestStruct2::decode_from_tars(&decoder, 0).unwrap();
 
-//     ts.encode_into_tars(&mut encoder).unwrap();
+    assert_eq!(de_ts, ts);
 
-//     let de_ts = TestStruct2::decode_from_tars(&encoder.to_bytes()).unwrap();
+    // case 3
 
-//     assert_eq!(de_ts, ts);
-// }
+    ts.y = 0;
+
+    let mut encoder = TarsEncoder::new();
+
+    ts.encode_into_tars(&mut encoder, 0).unwrap();
+
+    let decoder = TarsDecoder::from(&encoder.to_bytes());
+
+    let de_ts = TestStruct2::decode_from_tars(&decoder, 0).unwrap();
+
+    assert_eq!(de_ts, ts);
+}
