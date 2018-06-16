@@ -12,10 +12,10 @@ use uuid::Uuid;
 
 #[derive(Clone, Debug, PartialEq)]
 struct TestStruct {
-    a: i8,             // tag 0
-    b: u16,            // tag 1
-    v1: Vec<u8>,       // tag 2
-    c: String, // tag 3 option
+    a: i8,       // tag 0
+    b: u16,      // tag 1
+    v1: Vec<u8>, // tag 2
+    c: String,   // tag 3 option
     v2: Vec<i8>,
     v3: Vec<bool>,
 }
@@ -62,8 +62,20 @@ impl TestStruct {
     }
 }
 
-impl DecodeFromTars for TestStruct {
-    fn decode_from_tars(decoder: &TarsDecoder, _tag: u8) -> Result<Self, DecodeErr> {
+impl StructEncodeIntoTars for TestStruct {
+    fn struct_encode_into_tars(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
+        encoder.write_int8(0, self.a)?;
+        encoder.write_uint16(1, self.b)?;
+        encoder.write_list(2, &self.v1)?;
+        encoder.write_string(3, &self.c)?;
+        encoder.write_list(4, &self.v2)?;
+        encoder.write_list(5, &self.v3)?;
+        Ok(())
+    }
+}
+
+impl StrcutDecodeFromTars<TestStruct> for TestStruct {
+    fn struct_decode_from_tars(decoder: &TarsDecoder) -> Result<TestStruct, DecodeErr> {
         let a = decoder.read_int8(0, true, 0)?;
         let b = decoder.read_uint16(1, true, 0)?;
         let v1 = decoder.read_list(2, true, vec![])?;
@@ -81,15 +93,15 @@ impl DecodeFromTars for TestStruct {
     }
 }
 
+impl DecodeFromTars for TestStruct {
+    fn decode_from_tars(decoder: &TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
+        decoder.read_struct(tag, true, TestStruct::new())
+    }
+}
+
 impl EncodeIntoTars for TestStruct {
-    fn encode_into_tars(&self, encoder: &mut TarsEncoder, _tag: u8) -> Result<(), EncodeErr> {
-        encoder.write_int8(0, self.a)?;
-        encoder.write_uint16(1, self.b)?;
-        encoder.write_list(2, &self.v1)?;
-        encoder.write_string(3, &self.c)?;
-        encoder.write_list(4, &self.v2)?;
-        encoder.write_list(5, &self.v3)?;
-        Ok(())
+    fn encode_into_tars(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
+        encoder.write_struct(tag, self)
     }
 }
 
@@ -142,7 +154,7 @@ fn test_encode_decode_struct() {
 
 // impl EncodeIntoTars for TestEnum {
 //     fn encode_into_tars(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
-//         (self.clone() as i32).encode_into_tars(encoder)
+//         encoder.write_int32(tag, ele)
 //     }
 // }
 

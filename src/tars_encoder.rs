@@ -100,8 +100,15 @@ where
     fn write_list(&mut self, tag: u8, ele: &Vec<T>) -> Result<(), EncodeErr>;
 }
 
-pub trait TarsEncodeStructTrait<T> {
+pub trait TarsEncodeStructTrait<T>
+where
+    T: StructEncodeIntoTars,
+{
     fn write_struct(&mut self, tag: u8, ele: &T) -> Result<(), EncodeErr>;
+}
+
+pub trait StructEncodeIntoTars {
+    fn struct_encode_into_tars(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr>;
 }
 
 impl TarsEncoderSimpleTrait for TarsEncoder {
@@ -294,6 +301,17 @@ impl TarsEncodeListTrait<bool> for TarsEncoder {
                 .extend_from_slice(unsafe { mem::transmute(ele.as_slice()) });
             Ok(())
         }
+    }
+}
+
+impl<T> TarsEncodeStructTrait<T> for TarsEncoder
+where
+    T: StructEncodeIntoTars,
+{
+    fn write_struct(&mut self, tag: u8, ele: &T) -> Result<(), EncodeErr> {
+        self.put_head(tag, EnStructBegin)?;
+        ele.struct_encode_into_tars(self)?;
+        self.put_head(tag, EnStructEnd)
     }
 }
 
@@ -631,9 +649,6 @@ mod tests {
         let b = Bytes::from(&b"hello world!"[..]);
         let mut encoder = TarsEncoder::new();
         encoder.write_bytes(9, &b).unwrap();
-        assert_eq!(
-            &encoder.to_bytes(),
-            &b"\x9d\x00\x00\x0chello world!"[..]
-        );
+        assert_eq!(&encoder.to_bytes(), &b"\x9d\x00\x00\x0chello world!"[..]);
     }
 }

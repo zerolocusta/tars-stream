@@ -161,7 +161,7 @@ where
     T: ClassName,
 {
     fn _class_name() -> String {
-        // act list NodeJs implement
+        // List not list
         String::from("List<") + &T::_class_name() + &String::from(">")
     }
 }

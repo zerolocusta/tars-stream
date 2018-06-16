@@ -348,9 +348,13 @@ where
 
 pub trait TarsDecodeStructTrait<T>
 where
-    T: DecodeFromTars,
+    T: StrcutDecodeFromTars<T>,
 {
     fn read_struct(&self, tag: u8, is_required: bool, default_value: T) -> Result<T, DecodeErr>;
+}
+
+pub trait StrcutDecodeFromTars<T> {
+    fn struct_decode_from_tars(decoder: &TarsDecoder) -> Result<T, DecodeErr>;
 }
 
 impl TarsDecodeSimpleTrait for TarsDecoder {
@@ -705,13 +709,13 @@ where
 
 impl<T> TarsDecodeStructTrait<T> for TarsDecoder
 where
-    T: DecodeFromTars,
+    T: StrcutDecodeFromTars<T>,
 {
     fn read_struct(&self, tag: u8, is_required: bool, default_value: T) -> Result<T, DecodeErr> {
         let _g = DecoderPositionGuard::from(self);
         match self.skip_to_tag(tag) {
             Ok(head) => match head.tars_type {
-                EnStructBegin => T::decode_from_tars(self, 0),
+                EnStructBegin => T::struct_decode_from_tars(self),
                 _ => Err(DecodeErr::MisMatchTarsTypeErr),
             },
             Err(e) => {
