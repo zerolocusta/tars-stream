@@ -99,7 +99,6 @@ impl TarsDecoder {
         let before_pos = self.current_pos();
         while self.has_remaining() {
             let head = self.take_head()?;
-            println!("{:?} | {:?}", head, self.remaining());
             if head.tag == tag && head.tars_type != EnStructEnd {
                 result = Some(head);
                 break;
@@ -349,7 +348,6 @@ impl TarsDecodeNormalTrait for TarsDecoder {
         is_required: bool,
         default_value: i8,
     ) -> Result<i8, DecodeErr> {
-        println!("1");
         match self.skip_to_tag(tag) {
             Ok(head) => match head.tars_type {
                 // tag 查找成功
@@ -382,7 +380,6 @@ impl TarsDecodeNormalTrait for TarsDecoder {
         is_required: bool,
         default_value: i16,
     ) -> Result<i16, DecodeErr> {
-        println!("2");
 
         match self.skip_to_tag(tag) {
             Ok(head) => match head.tars_type {
@@ -409,7 +406,7 @@ impl TarsDecodeNormalTrait for TarsDecoder {
         is_required: bool,
         default_value: i32,
     ) -> Result<i32, DecodeErr> {
-        println!("3");
+        
 
         match self.skip_to_tag(tag) {
             Ok(head) => match head.tars_type {
@@ -440,7 +437,7 @@ impl TarsDecodeNormalTrait for TarsDecoder {
         is_required: bool,
         default_value: i64,
     ) -> Result<i64, DecodeErr> {
-        println!("4");
+        
 
         match self.skip_to_tag(tag) {
             Ok(head) => match head.tars_type {
@@ -505,7 +502,7 @@ impl TarsDecodeNormalTrait for TarsDecoder {
         is_required: bool,
         default_value: f32,
     ) -> Result<f32, DecodeErr> {
-        println!("5");
+        
 
         match self.skip_to_tag(tag) {
             Ok(head) => match head.tars_type {
@@ -528,7 +525,7 @@ impl TarsDecodeNormalTrait for TarsDecoder {
         is_required: bool,
         default_value: f64,
     ) -> Result<f64, DecodeErr> {
-        println!("6");
+        
 
         match self.skip_to_tag(tag) {
             Ok(head) => match head.tars_type {
@@ -551,7 +548,7 @@ impl TarsDecodeNormalTrait for TarsDecoder {
         is_required: bool,
         default_value: String,
     ) -> Result<String, DecodeErr> {
-        println!("7");
+        
 
         match self.skip_to_tag(tag) {
             Ok(head) => match head.tars_type {
@@ -583,7 +580,7 @@ impl TarsDecodeNormalTrait for TarsDecoder {
         is_required: bool,
         default_value: Bytes,
     ) -> Result<Bytes, DecodeErr> {
-        println!("8");
+        
 
         match self.skip_to_tag(tag) {
             Ok(head) => match head.tars_type {
@@ -615,7 +612,7 @@ impl TarsDecodeNormalTrait for TarsDecoder {
         K: DecodeFromTars + Ord,
         V: DecodeFromTars,
     {
-        println!("12");
+        
 
         match self.skip_to_tag(tag) {
             Ok(head) => match head.tars_type {
@@ -646,7 +643,7 @@ impl TarsDecodeNormalTrait for TarsDecoder {
     where
         T: StrcutDecodeFromTars,
     {
-        println!("13");
+        
 
         match self.skip_to_tag(tag) {
             Ok(head) => match head.tars_type {
@@ -670,7 +667,7 @@ where
         is_required: bool,
         default_value: Vec<T>,
     ) -> Result<Vec<T>, DecodeErr> {
-        println!("9");
+        
 
         match self.skip_to_tag(tag) {
             Ok(head) => match head.tars_type {
@@ -699,7 +696,7 @@ impl TarsDecodeListTrait<i8> for TarsDecoder {
         is_required: bool,
         default_value: Vec<i8>,
     ) -> Result<Vec<i8>, DecodeErr> {
-        println!("10");
+        
 
         match self.skip_to_tag(tag) {
             Ok(head) => match head.tars_type {
@@ -729,7 +726,7 @@ impl TarsDecodeListTrait<bool> for TarsDecoder {
         is_required: bool,
         default_value: Vec<bool>,
     ) -> Result<Vec<bool>, DecodeErr> {
-        println!("11");
+        
 
         match self.skip_to_tag(tag) {
             Ok(head) => match head.tars_type {
