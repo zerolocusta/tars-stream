@@ -21,14 +21,14 @@ impl TarsEncoder {
         }
     }
 
-    // pub fn individual_encode<T>(ele: &T) -> Result<Bytes, EncodeErr>
-    // where
-    //     T: EncodeIntoTars + ClassName,
-    // {
-    //     let mut encoder = TarsEncoder::new();
-    //     encoder.put(0, ele)?;
-    //     Ok(encoder.to_bytes())
-    // }
+    pub fn individual_encode<T>(ele: &T) -> Result<Bytes, EncodeErr>
+    where
+        T: EncodeIntoTars,
+    {
+        let mut encoder = TarsEncoder::new();
+        ele.encode_into_tars(&mut encoder, 0)?;
+        Ok(encoder.to_bytes())
+    }
 
     // move out buf
     pub fn to_bytes(self) -> Bytes {

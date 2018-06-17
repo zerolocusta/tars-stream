@@ -463,13 +463,12 @@ impl DecodeFromTars for TestOptionalStruct {
 
 impl StrcutDecodeFromTars for TestOptionalStruct {
     fn struct_decode_from_tars(decoder: &mut TarsDecoder) -> Result<TestOptionalStruct, DecodeErr> {
-        
         let a = decoder.read_struct(0, false, TestStruct2::new())?;
-        
+
         let b = decoder.read_bytes(1, true, Bytes::new())?;
-        
+
         let c = decoder.read_double(2, false, 0.0)?;
-        
+
         let d = decoder.read_map(3, true, BTreeMap::new())?;
         Ok(TestOptionalStruct { a, b, c, d })
     }
@@ -513,7 +512,7 @@ fn test_encode_decode_optioal() {
     let mut encoder = TarsEncoder::new();
     s.struct_encode_into_tars(&mut encoder).unwrap();
     let buf = encoder.to_bytes();
-    
+
     let mut decoder = TarsDecoder::from(&buf);
     let de_s = TestOptionalStruct::struct_decode_from_tars(&mut decoder).unwrap();
 

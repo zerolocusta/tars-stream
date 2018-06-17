@@ -7,7 +7,7 @@ quick_error!{
         UnknownTarsTypeErr{
             description("decoder: unknown tars type")
         }
-        TagNotFoundErr{
+        TarsTagNotFoundErr{
             description("decoder: Tag Not Found")
         }
         MisMatchTarsTypeErr {
@@ -24,6 +24,9 @@ quick_error!{
         }
         TypeNotFoundErr(desc: String) {
             description(desc)
+        }
+        TupKeyNotFoundErr {
+            description("decoder: Tup Key Not Found")
         }
     }
 }
