@@ -74,8 +74,8 @@ impl StructEncodeIntoTars for TestStruct {
     }
 }
 
-impl StrcutDecodeFromTars<TestStruct> for TestStruct {
-    fn struct_decode_from_tars(decoder: &TarsDecoder) -> Result<TestStruct, DecodeErr> {
+impl StrcutDecodeFromTars for TestStruct {
+    fn struct_decode_from_tars(decoder: &TarsDecoder) -> Result<Self, DecodeErr> {
         let a = decoder.read_int8(0, true, 0)?;
         let b = decoder.read_uint16(1, true, 0)?;
         let v1 = decoder.read_list(2, true, vec![])?;
@@ -223,8 +223,8 @@ impl DecodeFromTars for TestStruct2 {
     }
 }
 
-impl StrcutDecodeFromTars<TestStruct2> for TestStruct2 {
-    fn struct_decode_from_tars(decoder: &TarsDecoder) -> Result<TestStruct2, DecodeErr> {
+impl StrcutDecodeFromTars for TestStruct2 {
+    fn struct_decode_from_tars(decoder: &TarsDecoder) -> Result<Self, DecodeErr> {
         let f1 = decoder.read_float(0, true, 0.0)?;
         let f2 = decoder.read_double(1, true, 0.0)?;
 
@@ -387,4 +387,39 @@ fn test_encode_decode_struct2() {
     let de_ts = TestStruct2::decode_from_tars(&decoder, 0).unwrap();
 
     assert_eq!(de_ts, ts);
+}
+
+#[derive(Clone, Debug, PartialEq, PartialOrd)]
+struct TestOptionalStruct {
+    a: TestStruct2,
+    b: Bytes,
+    c: f64,
+    d: BTreeMap<String, String>,
+}
+
+impl TestOptionalStruct {
+    fn new() -> Self {
+        TestOptionalStruct {
+            a: TestStruct2::new(),
+            b: Bytes::new(),
+            c: 0.0,
+            d: BTreeMap::new(),
+        }
+    }
+}
+
+impl DecodeFromTars for TestOptionalStruct {
+    fn decode_from_tars(decoder: &TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
+        decoder.read_struct(tag, true, Self::new())
+    }
+}
+
+impl StrcutDecodeFromTars for TestOptionalStruct {
+    fn struct_decode_from_tars(decoder: &TarsDecoder) -> Result<TestOptionalStruct, DecodeErr> {
+        let a = decoder.read_struct(0, false, TestStruct2::new())?;
+        let b = decoder.read_bytes(1, true, Bytes::new())?;
+        let c = decoder.read_double(2, false, 0.0)?;
+        let d = decoder.read_map(3, true, BTreeMap::new())?;
+        Ok(TestOptionalStruct { a, b, c, d })
+    }
 }

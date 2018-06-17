@@ -265,7 +265,7 @@ impl From<Vec<u8>> for TarsDecoder {
     }
 }
 
-pub trait TarsDecodeSimpleTrait {
+pub trait TarsDecodeNormalTrait {
     fn read_int8(&self, tag: u8, is_required: bool, default_value: i8) -> Result<i8, DecodeErr>;
     fn read_boolean(
         &self,
@@ -300,36 +300,19 @@ pub trait TarsDecodeSimpleTrait {
         default_value: Bytes,
     ) -> Result<Bytes, DecodeErr>;
 
-    // fn read_int8_optional(
-    //     &self,
-    //     tag: u8,
-    //     default_value: Option<i8>,
-    // ) -> Result<Option<i8>, DecodeErr>;
+    fn read_map<K, V>(
+        &self,
+        tag: u8,
+        is_required: bool,
+        default_value: BTreeMap<K, V>,
+    ) -> Result<BTreeMap<K, V>, DecodeErr>
+    where
+        K: DecodeFromTars + Ord,
+        V: DecodeFromTars;
 
-    // fn read_boolean_optional(
-    //     &self,
-    //     tag: u8,
-    //     default_value: Option<bool>,
-    // ) -> Result<Option<bool>, DecodeErr>;
-
-    // fn read_int16_optional(
-    //     &self,
-    //     tag: u8,
-    //     default_value: Option<i16>,
-    // ) -> Result<Option<i16>, DecodeErr>;
-
-    // fn read_int32_optional(&self, tag: u8, default_value: Option<i32>) -> Result<Option<i32>, DecodeErr>;
-    // fn read_int64_optional(&self, tag: u8, default_value: Option<i64>) -> Result<Option<i64>, DecodeErr>;
-
-    // fn read_uint8_optional(&self, tag: u8, default_value: Option<u8>) -> Result<Option<u8>, DecodeErr>;
-    // fn read_uint16_optional(&self, tag: u8, default_value: Option<u16>) -> Result<Option<u16>, DecodeErr>;
-    // fn read_uint32_optional(&self, tag: u8, default_value: Option<u32>) -> Result<Option<u32>, DecodeErr>;
-
-    // fn read_float_optional(&self, tag: u8, default_value: Option<f32>) -> Result<Option<f32>, DecodeErr>;
-    // fn read_double_optional(&self, tag: u8, default_value: Option<f64>) -> Result<Option<f64>, DecodeErr>;
-    // fn read_string_optional(&self, tag: u8, default_value: Option<String>) -> Result<Option<String>, DecodeErr>;
-
-    // fn read_bytes_optional(&self, tag: u8, default_value: Option<Bytes>) -> Result<Option<Bytes>, DecodeErr>;
+    fn read_struct<T>(&self, tag: u8, is_required: bool, default_value: T) -> Result<T, DecodeErr>
+    where
+        T: StrcutDecodeFromTars;
 }
 
 pub trait TarsDecodeListTrait<T>
@@ -344,31 +327,11 @@ where
     ) -> Result<Vec<T>, DecodeErr>;
 }
 
-pub trait TarsDecodeMapTrait<K, V>
-where
-    K: DecodeFromTars + Ord,
-    V: DecodeFromTars,
-{
-    fn read_map(
-        &self,
-        tag: u8,
-        is_required: bool,
-        default_value: BTreeMap<K, V>,
-    ) -> Result<BTreeMap<K, V>, DecodeErr>;
+pub trait StrcutDecodeFromTars {
+    fn struct_decode_from_tars(decoder: &TarsDecoder) -> Result<Self, DecodeErr> where Self:Sized;
 }
 
-pub trait TarsDecodeStructTrait<T>
-where
-    T: StrcutDecodeFromTars<T>,
-{
-    fn read_struct(&self, tag: u8, is_required: bool, default_value: T) -> Result<T, DecodeErr>;
-}
-
-pub trait StrcutDecodeFromTars<T> {
-    fn struct_decode_from_tars(decoder: &TarsDecoder) -> Result<T, DecodeErr>;
-}
-
-impl TarsDecodeSimpleTrait for TarsDecoder {
+impl TarsDecodeNormalTrait for TarsDecoder {
     fn read_int8(&self, tag: u8, is_required: bool, default_value: i8) -> Result<i8, DecodeErr> {
         println!("1");
         let _g = DecoderPositionGuard::from(self);
@@ -602,6 +565,55 @@ impl TarsDecodeSimpleTrait for TarsDecoder {
             }
         }
     }
+
+    fn read_map<K, V>(
+        &self,
+        tag: u8,
+        is_required: bool,
+        default_value: BTreeMap<K, V>,
+    ) -> Result<BTreeMap<K, V>, DecodeErr>
+    where
+        K: DecodeFromTars + Ord,
+        V: DecodeFromTars,
+    {
+        println!("12");
+        let _g = DecoderPositionGuard::from(self);
+        match self.skip_to_tag(tag) {
+            Ok(head) => match head.tars_type {
+                EnMaps => {
+                    let size = self.read_int32(0, true, 0)? as usize;
+                    let mut m = BTreeMap::new();
+                    for _ in 0..size {
+                        let key = K::decode_from_tars(self, 0)?;
+                        let value = V::decode_from_tars(self, 1)?;
+                        m.insert(key, value);
+                    }
+                    Ok(m)
+                }
+                _ => Err(DecodeErr::MisMatchTarsTypeErr),
+            },
+            Err(e) => {
+                TarsDecoder::return_error_if_required_not_found(e, is_required, default_value)
+            }
+        }
+    }
+
+    fn read_struct<T>(&self, tag: u8, is_required: bool, default_value: T) -> Result<T, DecodeErr>
+    where
+        T: StrcutDecodeFromTars,
+    {
+        println!("13");
+        let _g = DecoderPositionGuard::from(self);
+        match self.skip_to_tag(tag) {
+            Ok(head) => match head.tars_type {
+                EnStructBegin => T::struct_decode_from_tars(self),
+                _ => Err(DecodeErr::MisMatchTarsTypeErr),
+            },
+            Err(e) => {
+                TarsDecoder::return_error_if_required_not_found(e, is_required, default_value)
+            }
+        }
+    }
 }
 
 impl<T> TarsDecodeListTrait<T> for TarsDecoder
@@ -687,59 +699,6 @@ impl TarsDecodeListTrait<bool> for TarsDecoder {
                         _ => Err(DecodeErr::WrongSimpleListTarsTypeErr),
                     }
                 }
-                _ => Err(DecodeErr::MisMatchTarsTypeErr),
-            },
-            Err(e) => {
-                TarsDecoder::return_error_if_required_not_found(e, is_required, default_value)
-            }
-        }
-    }
-}
-
-impl<K, V> TarsDecodeMapTrait<K, V> for TarsDecoder
-where
-    K: DecodeFromTars + Ord,
-    V: DecodeFromTars,
-{
-    fn read_map(
-        &self,
-        tag: u8,
-        is_required: bool,
-        default_value: BTreeMap<K, V>,
-    ) -> Result<BTreeMap<K, V>, DecodeErr> {
-        println!("12");
-        let _g = DecoderPositionGuard::from(self);
-        match self.skip_to_tag(tag) {
-            Ok(head) => match head.tars_type {
-                EnMaps => {
-                    let size = self.read_int32(0, true, 0)? as usize;
-                    let mut m = BTreeMap::new();
-                    for _ in 0..size {
-                        let key = K::decode_from_tars(self, 0)?;
-                        let value = V::decode_from_tars(self, 1)?;
-                        m.insert(key, value);
-                    }
-                    Ok(m)
-                }
-                _ => Err(DecodeErr::MisMatchTarsTypeErr),
-            },
-            Err(e) => {
-                TarsDecoder::return_error_if_required_not_found(e, is_required, default_value)
-            }
-        }
-    }
-}
-
-impl<T> TarsDecodeStructTrait<T> for TarsDecoder
-where
-    T: StrcutDecodeFromTars<T>,
-{
-    fn read_struct(&self, tag: u8, is_required: bool, default_value: T) -> Result<T, DecodeErr> {
-        println!("13");
-        let _g = DecoderPositionGuard::from(self);
-        match self.skip_to_tag(tag) {
-            Ok(head) => match head.tars_type {
-                EnStructBegin => T::struct_decode_from_tars(self),
                 _ => Err(DecodeErr::MisMatchTarsTypeErr),
             },
             Err(e) => {
@@ -853,8 +812,6 @@ mod tests {
     use errors::DecodeErr;
     use std::collections::BTreeMap;
     use std::mem;
-    use tars_type::TarsTypeMark;
-    use tars_type::TarsTypeMark::*;
 
     #[test]
     fn test_take_simple_list() {

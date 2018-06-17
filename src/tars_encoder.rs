@@ -65,7 +65,7 @@ impl TarsEncoder {
 
 // all write_xxxx method will move value into TarsDecoder
 
-pub trait TarsEncoderSimpleTrait {
+pub trait TarsEncoderNormalTrait {
     fn write_int8(&mut self, tag: u8, ele: i8) -> Result<(), EncodeErr>;
     fn write_boolean(&mut self, tag: u8, ele: bool) -> Result<(), EncodeErr>;
 
@@ -83,14 +83,15 @@ pub trait TarsEncoderSimpleTrait {
     fn write_string(&mut self, tag: u8, ele: &String) -> Result<(), EncodeErr>;
 
     fn write_bytes(&mut self, tag: u8, ele: &Bytes) -> Result<(), EncodeErr>;
-}
 
-pub trait TarsEncoderMapTrait<K, V>
-where
-    K: EncodeIntoTars + Ord,
-    V: EncodeIntoTars,
-{
-    fn write_map(&mut self, tag: u8, ele: &BTreeMap<K, V>) -> Result<(), EncodeErr>;
+    fn write_map<K, V>(&mut self, tag: u8, ele: &BTreeMap<K, V>) -> Result<(), EncodeErr>
+    where
+        K: EncodeIntoTars + Ord,
+        V: EncodeIntoTars;
+
+    fn write_struct<T>(&mut self, tag: u8, ele: &T) -> Result<(), EncodeErr>
+    where
+        T: StructEncodeIntoTars;
 }
 
 pub trait TarsEncodeListTrait<T>
@@ -100,18 +101,11 @@ where
     fn write_list(&mut self, tag: u8, ele: &Vec<T>) -> Result<(), EncodeErr>;
 }
 
-pub trait TarsEncodeStructTrait<T>
-where
-    T: StructEncodeIntoTars,
-{
-    fn write_struct(&mut self, tag: u8, ele: &T) -> Result<(), EncodeErr>;
-}
-
 pub trait StructEncodeIntoTars {
     fn struct_encode_into_tars(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr>;
 }
 
-impl TarsEncoderSimpleTrait for TarsEncoder {
+impl TarsEncoderNormalTrait for TarsEncoder {
     fn write_int8(&mut self, tag: u8, ele: i8) -> Result<(), EncodeErr> {
         if ele == 0 {
             self.put_head(tag, EnZero)
@@ -230,14 +224,12 @@ impl TarsEncoderSimpleTrait for TarsEncoder {
             Ok(())
         }
     }
-}
 
-impl<K, V> TarsEncoderMapTrait<K, V> for TarsEncoder
-where
-    K: EncodeIntoTars + Ord,
-    V: EncodeIntoTars,
-{
-    fn write_map(&mut self, tag: u8, ele: &BTreeMap<K, V>) -> Result<(), EncodeErr> {
+    fn write_map<K, V>(&mut self, tag: u8, ele: &BTreeMap<K, V>) -> Result<(), EncodeErr>
+    where
+        K: EncodeIntoTars + Ord,
+        V: EncodeIntoTars,
+    {
         let len = ele.len();
         if len > i32::max_value() as usize {
             Err(EncodeErr::DataTooBigErr)
@@ -250,6 +242,15 @@ where
             }
             Ok(())
         }
+    }
+
+    fn write_struct<T>(&mut self, tag: u8, ele: &T) -> Result<(), EncodeErr>
+    where
+        T: StructEncodeIntoTars,
+    {
+        self.put_head(tag, EnStructBegin)?;
+        ele.struct_encode_into_tars(self)?;
+        self.put_head(0, EnStructEnd)
     }
 }
 
@@ -301,17 +302,6 @@ impl TarsEncodeListTrait<bool> for TarsEncoder {
                 .extend_from_slice(unsafe { mem::transmute(ele.as_slice()) });
             Ok(())
         }
-    }
-}
-
-impl<T> TarsEncodeStructTrait<T> for TarsEncoder
-where
-    T: StructEncodeIntoTars,
-{
-    fn write_struct(&mut self, tag: u8, ele: &T) -> Result<(), EncodeErr> {
-        self.put_head(tag, EnStructBegin)?;
-        ele.struct_encode_into_tars(self)?;
-        self.put_head(0, EnStructEnd)
     }
 }
 
