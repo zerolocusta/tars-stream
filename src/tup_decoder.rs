@@ -88,6 +88,28 @@ pub trait TupDecoderTrait {
         is_require: bool,
         default_value: i8,
     ) -> Result<i8, DecodeErr>;
+
+    fn read_int16(
+        &self,
+        name: &String,
+        is_require: bool,
+        default_value: i16,
+    ) -> Result<i16, DecodeErr>;
+
+    fn read_int32(
+        &self,
+        name: &String,
+        is_require: bool,
+        default_value: i32,
+    ) -> Result<i32, DecodeErr>;
+
+    fn read_int64(
+        &self,
+        name: &String,
+        is_require: bool,
+        default_value: i64,
+    ) -> Result<i64, DecodeErr>;
+
 }
 
 impl TupDecoderTrait for TupDecoder {
@@ -102,79 +124,45 @@ impl TupDecoderTrait for TupDecoder {
             None => Self::return_error_if_required_not_found(is_require, default_value),
         }
     }
+
+    fn read_int16(
+        &self,
+        name: &String,
+        is_require: bool,
+        default_value: i16,
+    ) -> Result<i16, DecodeErr> {
+        match self.find(name)? {
+            Some(i) => Ok(i),
+            None => Self::return_error_if_required_not_found(is_require, default_value),
+        }
+    }
+
+
+    fn read_int32(
+        &self,
+        name: &String,
+        is_require: bool,
+        default_value: i32,
+    ) -> Result<i32, DecodeErr> {
+        match self.find(name)? {
+            Some(i) => Ok(i),
+            None => Self::return_error_if_required_not_found(is_require, default_value),
+        }
+    }
+
+    fn read_int64(
+        &self,
+        name: &String,
+        is_require: bool,
+        default_value: i64,
+    ) -> Result<i64, DecodeErr> {
+        match self.find(name)? {
+            Some(i) => Ok(i),
+            None => Self::return_error_if_required_not_found(is_require, default_value),
+        }
+    }    
+
 }
-
-// impl<T> TupDecoderTrait<T> for TupDecoder<SimpleTup>
-// where
-//     T: DecodeTars,
-// {
-//     fn get(&self, name: &String) -> Result<T, DecodeErr> {
-//         match self.map.get(name) {
-//             None => Err(DecodeErr::FieldNotFoundErr(
-//                 String::from("TupDecoder<SimpleTup> not found field: ") + name,
-//             )),
-//             Some(b) => Ok(TarsDecoder::individual_decode::<T>(b)?),
-//         }
-//     }
-// }
-
-// impl<T> TupDecoderTrait<Option<T>> for TupDecoder<SimpleTup>
-// where
-//     T: DecodeTars,
-// {
-//     fn get(&self, name: &String) -> Result<Option<T>, DecodeErr> {
-//         match self.map.get(name) {
-//             None => Ok(None),
-//             Some(b) => Ok(Some(TarsDecoder::individual_decode::<T>(b)?)),
-//         }
-//     }
-// }
-
-// impl<T> TupDecoderTrait<T> for TupDecoder<ComplexTup>
-// where
-//     T: DecodeTars + ClassName,
-// {
-//     fn get(&self, name: &String) -> Result<T, DecodeErr> {
-//         match self.map.get(name) {
-//             None => Err(DecodeErr::FieldNotFoundErr(
-//                 String::from("TupDecoder<ComplexTup> not found field: ") + name,
-//             )),
-//             Some(item) => match item.get(&T::_class_name()) {
-//                 None => Err(DecodeErr::TypeNotFoundErr(
-//                     "TupDecoder<ComplexTup> not found type: ".to_string() + &T::_class_name(),
-//                 )),
-//                 Some(b) => Ok(TarsDecoder::individual_decode::<T>(b)?),
-//             },
-//         }
-//     }
-// }
-
-// impl<T> TupDecoderTrait<Option<T>> for TupDecoder<ComplexTup>
-// where
-//     T: DecodeTars + ClassName,
-// {
-//     fn get(&self, name: &String) -> Result<Option<T>, DecodeErr> {
-//         match self.map.get(name) {
-//             None => Ok(None),
-//             Some(item) => match item.get(&T::_class_name()) {
-//                 None => Ok(None),
-//                 Some(b) => Ok(Some(TarsDecoder::individual_decode::<T>(b)?)),
-//             },
-//         }
-//     }
-// }
-
-// pub trait DecodeFromTup {
-//     fn decode_from_tup(b: &Bytes) -> Result<Self, DecodeErr>
-//     where
-//         Self: Sized;
-// }
-
-// #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-// pub struct UniTupDecoder {
-//     simple_tup_decoder: TupDecoder<SimpleTup>,
-//     complex_tup_decoder: TupDecoder<ComplexTup>,
-// }
 
 #[cfg(test)]
 mod tests {
@@ -185,12 +173,28 @@ mod tests {
     fn test_decode_simple_tup() {
         let mut map = BTreeMap::new();
 
+        let key0 = "zero".to_string();
+        let value0 = 0;
+
         let key1 = "hello".to_string();
         let value1 = i8::max_value();
+
+        let key2 = "world".to_string();
+        let value2 = i16::max_value();
+
+        map.insert(
+            key0.clone(),
+            TarsEncoder::individual_encode(&value0).unwrap(),
+        );
 
         map.insert(
             key1.clone(),
             TarsEncoder::individual_encode(&value1).unwrap(),
+        );
+
+        map.insert(
+            key2.clone(),
+            TarsEncoder::individual_encode(&value2).unwrap(),
         );
         // map.insert(
         //     "bar".to_string(),
@@ -205,8 +209,15 @@ mod tests {
             &TarsEncoder::individual_encode(&map).unwrap(),
             ProtocolVersion::TupSimple,
         ).unwrap();
+
+        let de_0 = tup_de.read_int64(&key0, true, 0).unwrap();
+        assert_eq!(de_0, value0);
+
         let de_i8: i8 = tup_de.read_int8(&key1, true, 0).unwrap();
         assert_eq!(de_i8, value1);
+
+        let de_i16 = tup_de.read_int16(&key2, true, 0).unwrap();
+        assert_eq!(de_i16, value2);
 
         // let de_bool: bool = tup_de.get(&"bar".to_string()).unwrap();
         // assert_eq!(de_bool, false);
