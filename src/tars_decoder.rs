@@ -1,7 +1,6 @@
 use bytes::{Buf, Bytes, IntoBuf};
 use std::collections::BTreeMap;
 use std::mem;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use errors::DecodeErr;
 use tars_type::TarsTypeMark;
@@ -214,54 +213,83 @@ impl TarsDecoder {
 impl<'a> From<&'a [u8]> for TarsDecoder {
     fn from(buf: &'a [u8]) -> Self {
         let b = Bytes::from(buf);
-        TarsDecoder {
-            buf: b,
-            pos: 0,
-        }
+        TarsDecoder { buf: b, pos: 0 }
     }
 }
 
 impl<'a> From<&'a Bytes> for TarsDecoder {
     fn from(buf: &'a Bytes) -> Self {
         let b = buf.clone();
-        TarsDecoder {
-            buf: b,
-            pos: 0,
-        }
+        TarsDecoder { buf: b, pos: 0 }
     }
 }
 
 impl From<Vec<u8>> for TarsDecoder {
     fn from(buf: Vec<u8>) -> Self {
         let b = Bytes::from(buf);
-        TarsDecoder {
-            buf: b,
-            pos: 0,
-        }
+        TarsDecoder { buf: b, pos: 0 }
     }
 }
 
 pub trait TarsDecodeNormalTrait {
-    fn read_int8(&mut self, tag: u8, is_required: bool, default_value: i8) -> Result<i8, DecodeErr>;
+    fn read_int8(&mut self, tag: u8, is_required: bool, default_value: i8)
+        -> Result<i8, DecodeErr>;
     fn read_boolean(
         &mut self,
         tag: u8,
         is_required: bool,
         default_value: bool,
     ) -> Result<bool, DecodeErr>;
-    fn read_int16(&mut self, tag: u8, is_required: bool, default_value: i16) -> Result<i16, DecodeErr>;
-    fn read_int32(&mut self, tag: u8, is_required: bool, default_value: i32) -> Result<i32, DecodeErr>;
-    fn read_int64(&mut self, tag: u8, is_required: bool, default_value: i64) -> Result<i64, DecodeErr>;
+    fn read_int16(
+        &mut self,
+        tag: u8,
+        is_required: bool,
+        default_value: i16,
+    ) -> Result<i16, DecodeErr>;
+    fn read_int32(
+        &mut self,
+        tag: u8,
+        is_required: bool,
+        default_value: i32,
+    ) -> Result<i32, DecodeErr>;
+    fn read_int64(
+        &mut self,
+        tag: u8,
+        is_required: bool,
+        default_value: i64,
+    ) -> Result<i64, DecodeErr>;
 
-    fn read_uint8(&mut self, tag: u8, is_required: bool, default_value: u8) -> Result<u8, DecodeErr>;
-    fn read_uint16(&mut self, tag: u8, is_required: bool, default_value: u16)
-        -> Result<u16, DecodeErr>;
-    fn read_uint32(&mut self, tag: u8, is_required: bool, default_value: u32)
-        -> Result<u32, DecodeErr>;
+    fn read_uint8(
+        &mut self,
+        tag: u8,
+        is_required: bool,
+        default_value: u8,
+    ) -> Result<u8, DecodeErr>;
+    fn read_uint16(
+        &mut self,
+        tag: u8,
+        is_required: bool,
+        default_value: u16,
+    ) -> Result<u16, DecodeErr>;
+    fn read_uint32(
+        &mut self,
+        tag: u8,
+        is_required: bool,
+        default_value: u32,
+    ) -> Result<u32, DecodeErr>;
 
-    fn read_float(&mut self, tag: u8, is_required: bool, default_value: f32) -> Result<f32, DecodeErr>;
-    fn read_double(&mut self, tag: u8, is_required: bool, default_value: f64)
-        -> Result<f64, DecodeErr>;
+    fn read_float(
+        &mut self,
+        tag: u8,
+        is_required: bool,
+        default_value: f32,
+    ) -> Result<f32, DecodeErr>;
+    fn read_double(
+        &mut self,
+        tag: u8,
+        is_required: bool,
+        default_value: f64,
+    ) -> Result<f64, DecodeErr>;
     fn read_string(
         &mut self,
         tag: u8,
@@ -286,7 +314,12 @@ pub trait TarsDecodeNormalTrait {
         K: DecodeFromTars + Ord,
         V: DecodeFromTars;
 
-    fn read_struct<T>(&mut self, tag: u8, is_required: bool, default_value: T) -> Result<T, DecodeErr>
+    fn read_struct<T>(
+        &mut self,
+        tag: u8,
+        is_required: bool,
+        default_value: T,
+    ) -> Result<T, DecodeErr>
     where
         T: StrcutDecodeFromTars;
 }
@@ -310,7 +343,12 @@ pub trait StrcutDecodeFromTars {
 }
 
 impl TarsDecodeNormalTrait for TarsDecoder {
-    fn read_int8(&mut self, tag: u8, is_required: bool, default_value: i8) -> Result<i8, DecodeErr> {
+    fn read_int8(
+        &mut self,
+        tag: u8,
+        is_required: bool,
+        default_value: i8,
+    ) -> Result<i8, DecodeErr> {
         println!("1");
         match self.skip_to_tag(tag) {
             Ok(head) => match head.tars_type {
@@ -338,7 +376,12 @@ impl TarsDecodeNormalTrait for TarsDecoder {
             .map(|i| i != 0)
     }
 
-    fn read_int16(&mut self, tag: u8, is_required: bool, default_value: i16) -> Result<i16, DecodeErr> {
+    fn read_int16(
+        &mut self,
+        tag: u8,
+        is_required: bool,
+        default_value: i16,
+    ) -> Result<i16, DecodeErr> {
         println!("2");
 
         match self.skip_to_tag(tag) {
@@ -360,7 +403,12 @@ impl TarsDecodeNormalTrait for TarsDecoder {
         }
     }
 
-    fn read_int32(&mut self, tag: u8, is_required: bool, default_value: i32) -> Result<i32, DecodeErr> {
+    fn read_int32(
+        &mut self,
+        tag: u8,
+        is_required: bool,
+        default_value: i32,
+    ) -> Result<i32, DecodeErr> {
         println!("3");
 
         match self.skip_to_tag(tag) {
@@ -386,7 +434,12 @@ impl TarsDecodeNormalTrait for TarsDecoder {
         }
     }
 
-    fn read_int64(&mut self, tag: u8, is_required: bool, default_value: i64) -> Result<i64, DecodeErr> {
+    fn read_int64(
+        &mut self,
+        tag: u8,
+        is_required: bool,
+        default_value: i64,
+    ) -> Result<i64, DecodeErr> {
         println!("4");
 
         match self.skip_to_tag(tag) {
@@ -416,7 +469,12 @@ impl TarsDecodeNormalTrait for TarsDecoder {
         }
     }
 
-    fn read_uint8(&mut self, tag: u8, is_required: bool, default_value: u8) -> Result<u8, DecodeErr> {
+    fn read_uint8(
+        &mut self,
+        tag: u8,
+        is_required: bool,
+        default_value: u8,
+    ) -> Result<u8, DecodeErr> {
         self.read_int16(tag, is_required, default_value as i16)
             .map(|i| i as u8)
     }
@@ -441,7 +499,12 @@ impl TarsDecodeNormalTrait for TarsDecoder {
             .map(|i| i as u32)
     }
 
-    fn read_float(&mut self, tag: u8, is_required: bool, default_value: f32) -> Result<f32, DecodeErr> {
+    fn read_float(
+        &mut self,
+        tag: u8,
+        is_required: bool,
+        default_value: f32,
+    ) -> Result<f32, DecodeErr> {
         println!("5");
 
         match self.skip_to_tag(tag) {
@@ -574,7 +637,12 @@ impl TarsDecodeNormalTrait for TarsDecoder {
         }
     }
 
-    fn read_struct<T>(&mut self, tag: u8, is_required: bool, default_value: T) -> Result<T, DecodeErr>
+    fn read_struct<T>(
+        &mut self,
+        tag: u8,
+        is_required: bool,
+        default_value: T,
+    ) -> Result<T, DecodeErr>
     where
         T: StrcutDecodeFromTars,
     {

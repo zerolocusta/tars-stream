@@ -215,6 +215,53 @@ impl TestStruct2 {
             e: vec![],
         }
     }
+
+    pub fn random_for_test() -> Self {
+        let mut ts = TestStruct2::new();
+
+        ts.f1 = random();
+        ts.f2 = random();
+
+        ts.i1 = random();
+        ts.i2 = random();
+        ts.i3 = random();
+        ts.i4 = random();
+
+        ts.u1 = random();
+        ts.u2 = random();
+        ts.u3 = random();
+
+        ts.b = random();
+
+        ts.s = TestStruct::random_for_test();
+
+        let v_len: u8 = random();
+        for _ in 0..v_len {
+            ts.v.push(TestStruct::random_for_test());
+        }
+
+        let m_len: u8 = random();
+        for _ in 0..m_len {
+            ts.m
+                .insert(Uuid::new_v4().to_string(), Uuid::new_v4().to_string());
+        }
+
+        ts.y = random();
+        ts.z = TestStruct::random_for_test();
+        ts.x = Bytes::from(ts.s.v1.as_slice());
+
+        let e_len: u8 = random();
+        for _ in 0..e_len {
+            let b: bool = random();
+            if b {
+                ts.e.push(TestEnum::A);
+            } else {
+                ts.e.push(TestEnum::B);
+            }
+        }
+
+        ts
+    }
 }
 
 impl DecodeFromTars for TestStruct2 {
@@ -436,6 +483,24 @@ impl EncodeIntoTars for TestOptionalStruct {
 
 impl StructEncodeIntoTars for TestOptionalStruct {
     fn struct_encode_into_tars(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
+        // write fake binary into encoder for test skip_field
+
+        encoder.write_int8(128, i8::min_value())?;
+        encoder.write_int16(129, i16::min_value())?;
+        encoder.write_int32(130, i32::min_value())?;
+        encoder.write_int64(131, i64::min_value())?;
+
+        encoder.write_uint8(132, u8::max_value())?;
+        encoder.write_uint16(133, u16::max_value())?;
+        encoder.write_uint32(134, u32::max_value())?;
+
+        encoder.write_boolean(135, true)?;
+        encoder.write_float(136, 7.123)?;
+        encoder.write_double(137, 0.42222)?;
+
+        encoder.write_bytes(138, &Bytes::new())?;
+        encoder.write_struct(139, &TestStruct2::random_for_test())?;
+
         // Not write a
         encoder.write_bytes(1, &self.b)?;
         // Not write c
@@ -444,9 +509,9 @@ impl StructEncodeIntoTars for TestOptionalStruct {
 }
 #[test]
 fn test_encode_decode_optioal() {
-    let mut s = TestOptionalStruct::new();
+    let s = TestOptionalStruct::new();
     let mut encoder = TarsEncoder::new();
-    s.struct_encode_into_tars(&mut encoder);
+    s.struct_encode_into_tars(&mut encoder).unwrap();
     let buf = encoder.to_bytes();
     println!("{:?}", buf);
     let mut decoder = TarsDecoder::from(&buf);
