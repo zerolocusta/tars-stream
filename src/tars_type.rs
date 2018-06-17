@@ -47,6 +47,7 @@ impl From<u8> for TarsTypeMark {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ProtocolVersion {
     Tars = 1,
     TupSimple = 2,

@@ -1,22 +1,57 @@
 use bytes::Bytes;
-use std::collections::BTreeMap;
-
 use errors::DecodeErr;
-use tars_decoder::{TarsDecoder, TarsDecodeNormalTrait, TarsDecodeListTrait, DecodeFromTars};
+use std::collections::BTreeMap;
+use tars_decoder::{DecodeFromTars, TarsDecodeListTrait, TarsDecodeNormalTrait, TarsDecoder};
 use tars_type::{ClassName, ProtocolVersion};
 
-type SimpleTup = BTreeMap<String, Bytes>;
-type ComplexTup = BTreeMap<String, BTreeMap<String, Bytes>>;
+type SimpleTupMap = BTreeMap<String, Bytes>;
+type ComplexTupMap = BTreeMap<String, BTreeMap<String, Bytes>>;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct TupDecoder<M> {
-    map: M,
+pub struct TupDecoder {
+    version: ProtocolVersion,
+    simple_map: SimpleTupMap,
+    complex_map: ComplexTupMap,
 }
 // for SimpleTup protocol version
-impl TupDecoder<SimpleTup> {
-    pub fn new() -> Self {
-        TupDecoder {
-            map: BTreeMap::new(),
+impl TupDecoder {
+    pub fn new(version: ProtocolVersion) -> Self {
+        match version {
+            ProtocolVersion::TupSimple => TupDecoder {
+                version,
+                simple_map: BTreeMap::new(),
+                complex_map: BTreeMap::new(),
+            },
+            ProtocolVersion::TupComplex => TupDecoder {
+                version,
+                simple_map: BTreeMap::new(),
+                complex_map: BTreeMap::new(),
+            },
+            _ => TupDecoder {
+                version,
+                simple_map: BTreeMap::new(),
+                complex_map: BTreeMap::new(),
+            },
+        }
+    }
+
+    pub fn from_bytes<'a>(buf: &'a Bytes, version: ProtocolVersion) -> Result<Self, DecodeErr> {
+        match version {
+            ProtocolVersion::TupSimple => Ok(TupDecoder {
+                version,
+                simple_map: TarsDecoder::individual_decode(buf)?,
+                complex_map: BTreeMap::new(),
+            }),
+            ProtocolVersion::TupComplex => Ok(TupDecoder {
+                version,
+                simple_map: BTreeMap::new(),
+                complex_map: TarsDecoder::individual_decode(buf)?,
+            }),
+            _ => Ok(TupDecoder {
+                version,
+                simple_map: BTreeMap::new(),
+                complex_map: BTreeMap::new(),
+            }),
         }
     }
 
@@ -33,36 +68,15 @@ impl TupDecoder<SimpleTup> {
 
     pub fn find<T>(&self, name: &String) -> Result<Option<T>, DecodeErr>
     where
-        T: DecodeFromTars,
+        T: DecodeFromTars + ClassName,
     {
-        match self.map.get(name) {
-            Some(b) => Ok(Some(TarsDecoder::individual_decode(b)?)),
-            None => Ok(None),
-        }
-    }
-}
-
-// for ComplexTup protocol version
-impl TupDecoder<ComplexTup> {
-    pub fn new() -> Self {
-        TupDecoder {
-            map: BTreeMap::new(),
-        }
-    }
-}
-
-impl<'a, K, V> From<&'a Bytes> for TupDecoder<BTreeMap<K, V>>
-where
-    K: DecodeFromTars + Ord,
-    V: DecodeFromTars,
-{
-    fn from(buf: &'a Bytes) -> Self {
-        let mut decoder = TarsDecoder::from(buf);
-        match decoder.read_map(0, true, BTreeMap::new()) {
-            Err(_) => TupDecoder {
-                map: BTreeMap::new(),
+        match self.version {
+            ProtocolVersion::TupSimple => match self.simple_map.get(name) {
+                Some(b) => Ok(Some(TarsDecoder::individual_decode(b)?)),
+                None => Ok(None),
             },
-            Ok(m) => TupDecoder { map: m },
+            ProtocolVersion::TupComplex => unimplemented!(),
+            _ => Err(DecodeErr::UnsupportTupVersionErr),
         }
     }
 }
@@ -76,7 +90,7 @@ pub trait TupDecoderTrait {
     ) -> Result<i8, DecodeErr>;
 }
 
-impl TupDecoderTrait for TupDecoder<SimpleTup> {
+impl TupDecoderTrait for TupDecoder {
     fn read_int8(
         &self,
         name: &String,
@@ -187,8 +201,10 @@ mod tests {
         //     TarsEncoder::individual_encode(&128).unwrap(),
         // );
 
-        let tup_de: TupDecoder<SimpleTup> =
-            TupDecoder::from(&TarsEncoder::individual_encode(&map).unwrap());
+        let tup_de = TupDecoder::from_bytes(
+            &TarsEncoder::individual_encode(&map).unwrap(),
+            ProtocolVersion::TupSimple,
+        ).unwrap();
         let de_i8: i8 = tup_de.read_int8(&key1, true, 0).unwrap();
         assert_eq!(de_i8, value1);
 
@@ -202,43 +218,43 @@ mod tests {
         // assert_eq!(n, Some(128));
     }
 
-//     #[test]
-//     fn test_decode_complex_tup() {
-//         let mut map = BTreeMap::new();
+    //     #[test]
+    //     fn test_decode_complex_tup() {
+    //         let mut map = BTreeMap::new();
 
-//         let mut item1 = BTreeMap::new();
-//         let key1 = String::from("hello");
-//         let value1 = String::from("world");
-//         item1.insert(
-//             String::_class_name(),
-//             TarsEncoder::individual_encode(&value1).unwrap(),
-//         );
-//         map.insert(key1.clone(), item1);
+    //         let mut item1 = BTreeMap::new();
+    //         let key1 = String::from("hello");
+    //         let value1 = String::from("world");
+    //         item1.insert(
+    //             String::_class_name(),
+    //             TarsEncoder::individual_encode(&value1).unwrap(),
+    //         );
+    //         map.insert(key1.clone(), item1);
 
-//         let mut item2 = BTreeMap::new();
-//         let key2 = String::from("foo");
-//         let value2: u8 = 255;
-//         item2.insert(
-//             u8::_class_name(),
-//             TarsEncoder::individual_encode(&value2).unwrap(),
-//         );
-//         map.insert(key2.clone(), item2);
+    //         let mut item2 = BTreeMap::new();
+    //         let key2 = String::from("foo");
+    //         let value2: u8 = 255;
+    //         item2.insert(
+    //             u8::_class_name(),
+    //             TarsEncoder::individual_encode(&value2).unwrap(),
+    //         );
+    //         map.insert(key2.clone(), item2);
 
-//         let mut item2 = BTreeMap::new();
-//         let key2 = String::from("foo");
-//         let value2: u16 = 65535;
-//         item2.insert(
-//             u16::_class_name(),
-//             TarsEncoder::individual_encode(&value2).unwrap(),
-//         );
-//         map.insert(key2.clone(), item2);
+    //         let mut item2 = BTreeMap::new();
+    //         let key2 = String::from("foo");
+    //         let value2: u16 = 65535;
+    //         item2.insert(
+    //             u16::_class_name(),
+    //             TarsEncoder::individual_encode(&value2).unwrap(),
+    //         );
+    //         map.insert(key2.clone(), item2);
 
-//         let tup_de: TupDecoder<ComplexTup> =
-//             TupDecoder::from(&TarsEncoder::individual_encode(&map).unwrap());
-//         let de_value1: String = tup_de.get(&key1).unwrap();
-//         assert_eq!(value1, de_value1);
+    //         let tup_de: TupDecoder<ComplexTup> =
+    //             TupDecoder::from(&TarsEncoder::individual_encode(&map).unwrap());
+    //         let de_value1: String = tup_de.get(&key1).unwrap();
+    //         assert_eq!(value1, de_value1);
 
-//         let de_value2: u16 = tup_de.get(&key2).unwrap();
-//         assert_eq!(value2, de_value2);
-//     }
+    //         let de_value2: u16 = tup_de.get(&key2).unwrap();
+    //         assert_eq!(value2, de_value2);
+    //     }
 }

@@ -28,6 +28,9 @@ quick_error!{
         TupKeyNotFoundErr {
             description("decoder: Tup Key Not Found")
         }
+        UnsupportTupVersionErr {
+            description("decoder: Tup Unsupport protocol version")
+        }
     }
 }
 
