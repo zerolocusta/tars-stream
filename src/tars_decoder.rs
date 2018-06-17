@@ -28,10 +28,10 @@ impl TarsDecoder {
 
     pub fn individual_decode<T>(buf: &Bytes) -> Result<T, DecodeErr>
     where
-        T: DecodeFromTars,
+        T: DecodeTars,
     {
         let mut decoder = TarsDecoder::from(buf);
-        T::decode_from_tars(&mut decoder, 0)
+        T::_decode(&mut decoder, 0)
     }
 
     #[inline]
@@ -304,8 +304,8 @@ pub trait TarsDecodeNormalTrait {
         default_value: BTreeMap<K, V>,
     ) -> Result<BTreeMap<K, V>, DecodeErr>
     where
-        K: DecodeFromTars + Ord,
-        V: DecodeFromTars;
+        K: DecodeTars + Ord,
+        V: DecodeTars;
 
     fn read_struct<T>(
         &mut self,
@@ -314,12 +314,12 @@ pub trait TarsDecodeNormalTrait {
         default_value: T,
     ) -> Result<T, DecodeErr>
     where
-        T: StrcutDecodeFromTars;
+        T: DecodeFromTars;
 }
 
 pub trait TarsDecodeListTrait<T>
 where
-    T: DecodeFromTars,
+    T: DecodeTars,
 {
     fn read_list(
         &mut self,
@@ -329,8 +329,8 @@ where
     ) -> Result<Vec<T>, DecodeErr>;
 }
 
-pub trait StrcutDecodeFromTars {
-    fn struct_decode_from_tars(decoder: &mut TarsDecoder) -> Result<Self, DecodeErr>
+pub trait DecodeFromTars {
+    fn _decode_from(decoder: &mut TarsDecoder) -> Result<Self, DecodeErr>
     where
         Self: Sized;
 }
@@ -569,8 +569,8 @@ impl TarsDecodeNormalTrait for TarsDecoder {
         default_value: BTreeMap<K, V>,
     ) -> Result<BTreeMap<K, V>, DecodeErr>
     where
-        K: DecodeFromTars + Ord,
-        V: DecodeFromTars,
+        K: DecodeTars + Ord,
+        V: DecodeTars,
     {
         match self.skip_to_tag(tag) {
             Ok(head) => match head.tars_type {
@@ -578,8 +578,8 @@ impl TarsDecodeNormalTrait for TarsDecoder {
                     let size = self.read_int32(0, true, 0)? as usize;
                     let mut m = BTreeMap::new();
                     for _ in 0..size {
-                        let key = K::decode_from_tars(self, 0)?;
-                        let value = V::decode_from_tars(self, 1)?;
+                        let key = K::_decode(self, 0)?;
+                        let value = V::_decode(self, 1)?;
                         m.insert(key, value);
                     }
                     Ok(m)
@@ -597,11 +597,11 @@ impl TarsDecodeNormalTrait for TarsDecoder {
         default_value: T,
     ) -> Result<T, DecodeErr>
     where
-        T: StrcutDecodeFromTars,
+        T: DecodeFromTars,
     {
         match self.skip_to_tag(tag) {
             Ok(head) => match head.tars_type {
-                EnStructBegin => T::struct_decode_from_tars(self),
+                EnStructBegin => T::_decode_from(self),
                 _ => Err(DecodeErr::MisMatchTarsTypeErr),
             },
             Err(e) => TarsDecoder::return_error_if_required_not_found(e, is_require, default_value),
@@ -611,7 +611,7 @@ impl TarsDecodeNormalTrait for TarsDecoder {
 
 impl<T> TarsDecodeListTrait<T> for TarsDecoder
 where
-    T: DecodeFromTars,
+    T: DecodeTars,
 {
     default fn read_list(
         &mut self,
@@ -625,7 +625,7 @@ where
                     let size = self.read_int32(0, true, 0)? as usize;
                     let mut v = vec![];
                     for _ in 0..size {
-                        let ele = T::decode_from_tars(self, 0)?;
+                        let ele = T::_decode(self, 0)?;
                         v.push(ele);
                     }
                     Ok(v)
@@ -689,99 +689,99 @@ impl TarsDecodeListTrait<bool> for TarsDecoder {
     }
 }
 
-pub trait DecodeFromTars {
-    fn decode_from_tars(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr>
+pub trait DecodeTars {
+    fn _decode(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr>
     where
         Self: Sized;
 }
 
-impl DecodeFromTars for i8 {
-    fn decode_from_tars(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
+impl DecodeTars for i8 {
+    fn _decode(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
         decoder.read_int8(tag, true, i8::default())
     }
 }
 
-impl DecodeFromTars for bool {
-    fn decode_from_tars(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
+impl DecodeTars for bool {
+    fn _decode(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
         decoder.read_boolean(tag, true, bool::default())
     }
 }
 
-impl DecodeFromTars for i16 {
-    fn decode_from_tars(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
+impl DecodeTars for i16 {
+    fn _decode(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
         decoder.read_int16(tag, true, i16::default())
     }
 }
 
-impl DecodeFromTars for i32 {
-    fn decode_from_tars(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
+impl DecodeTars for i32 {
+    fn _decode(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
         decoder.read_int32(tag, true, i32::default())
     }
 }
 
-impl DecodeFromTars for i64 {
-    fn decode_from_tars(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
+impl DecodeTars for i64 {
+    fn _decode(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
         decoder.read_int64(tag, true, i64::default())
     }
 }
 
-impl DecodeFromTars for u8 {
-    fn decode_from_tars(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
+impl DecodeTars for u8 {
+    fn _decode(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
         decoder.read_uint8(tag, true, u8::default())
     }
 }
 
-impl DecodeFromTars for u16 {
-    fn decode_from_tars(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
+impl DecodeTars for u16 {
+    fn _decode(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
         decoder.read_uint16(tag, true, u16::default())
     }
 }
 
-impl DecodeFromTars for u32 {
-    fn decode_from_tars(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
+impl DecodeTars for u32 {
+    fn _decode(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
         decoder.read_uint32(tag, true, u32::default())
     }
 }
 
-impl DecodeFromTars for f32 {
-    fn decode_from_tars(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
+impl DecodeTars for f32 {
+    fn _decode(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
         decoder.read_float(tag, true, f32::default())
     }
 }
 
-impl DecodeFromTars for f64 {
-    fn decode_from_tars(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
+impl DecodeTars for f64 {
+    fn _decode(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
         decoder.read_double(tag, true, f64::default())
     }
 }
 
-impl DecodeFromTars for String {
-    fn decode_from_tars(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
+impl DecodeTars for String {
+    fn _decode(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
         decoder.read_string(tag, true, String::default())
     }
 }
 
-impl<K, V> DecodeFromTars for BTreeMap<K, V>
+impl<K, V> DecodeTars for BTreeMap<K, V>
 where
-    K: DecodeFromTars + Ord,
-    V: DecodeFromTars,
+    K: DecodeTars + Ord,
+    V: DecodeTars,
 {
-    fn decode_from_tars(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
+    fn _decode(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
         decoder.read_map(tag, true, BTreeMap::<K, V>::new())
     }
 }
 
-impl<T> DecodeFromTars for Vec<T>
+impl<T> DecodeTars for Vec<T>
 where
-    T: DecodeFromTars,
+    T: DecodeTars,
 {
-    fn decode_from_tars(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
+    fn _decode(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
         decoder.read_list(tag, true, vec![])
     }
 }
 
-impl DecodeFromTars for Bytes {
-    fn decode_from_tars(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
+impl DecodeTars for Bytes {
+    fn _decode(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
         decoder.read_bytes(tag, true, Bytes::default())
     }
 }

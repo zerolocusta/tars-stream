@@ -62,8 +62,8 @@ impl TestStruct {
     }
 }
 
-impl StructEncodeIntoTars for TestStruct {
-    fn struct_encode_into_tars(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
+impl EncodeToTars for TestStruct {
+    fn _encode_to(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
         encoder.write_int8(0, self.a)?;
         encoder.write_uint16(1, self.b)?;
         encoder.write_list(2, &self.v1)?;
@@ -74,8 +74,8 @@ impl StructEncodeIntoTars for TestStruct {
     }
 }
 
-impl StrcutDecodeFromTars for TestStruct {
-    fn struct_decode_from_tars(decoder: &mut TarsDecoder) -> Result<Self, DecodeErr> {
+impl DecodeFromTars for TestStruct {
+    fn _decode_from(decoder: &mut TarsDecoder) -> Result<Self, DecodeErr> {
         let a = decoder.read_int8(0, true, 0)?;
         let b = decoder.read_uint16(1, true, 0)?;
         let v1 = decoder.read_list(2, true, vec![])?;
@@ -93,14 +93,14 @@ impl StrcutDecodeFromTars for TestStruct {
     }
 }
 
-impl DecodeFromTars for TestStruct {
-    fn decode_from_tars(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
+impl DecodeTars for TestStruct {
+    fn _decode(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
         decoder.read_struct(tag, true, TestStruct::new())
     }
 }
 
-impl EncodeIntoTars for TestStruct {
-    fn encode_into_tars(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
+impl EncodeTars for TestStruct {
+    fn _encode(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
         encoder.write_struct(tag, self)
     }
 }
@@ -116,22 +116,22 @@ fn test_encode_decode_struct() {
     let mut encoder = TarsEncoder::new();
     let ts = TestStruct::new();
 
-    ts.encode_into_tars(&mut encoder, 0).unwrap();
+    ts._encode(&mut encoder, 0).unwrap();
 
     let mut decoder = TarsDecoder::from(&encoder.to_bytes());
 
-    let de_ts = TestStruct::decode_from_tars(&mut decoder, 0).unwrap();
+    let de_ts = TestStruct::_decode(&mut decoder, 0).unwrap();
 
     assert_eq!(de_ts, ts);
 
     let mut encoder = TarsEncoder::new();
     let ts = TestStruct::random_for_test();
 
-    ts.encode_into_tars(&mut encoder, 0).unwrap();
+    ts._encode(&mut encoder, 0).unwrap();
 
     let mut decoder = TarsDecoder::from(&encoder.to_bytes());
 
-    let de_ts = TestStruct::decode_from_tars(&mut decoder, 0).unwrap();
+    let de_ts = TestStruct::_decode(&mut decoder, 0).unwrap();
 
     assert_eq!(de_ts, ts);
 }
@@ -142,8 +142,8 @@ enum TestEnum {
     B = 1337,
 }
 
-impl DecodeFromTars for TestEnum {
-    fn decode_from_tars(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
+impl DecodeTars for TestEnum {
+    fn _decode(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
         match decoder.read_int32(tag, true, -32)? {
             -32 => Ok(TestEnum::A),
             1337 => Ok(TestEnum::B),
@@ -152,8 +152,8 @@ impl DecodeFromTars for TestEnum {
     }
 }
 
-impl EncodeIntoTars for TestEnum {
-    fn encode_into_tars(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
+impl EncodeTars for TestEnum {
+    fn _encode(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
         encoder.write_int32(tag, (self.clone()) as i32)
     }
 }
@@ -264,14 +264,14 @@ impl TestStruct2 {
     }
 }
 
-impl DecodeFromTars for TestStruct2 {
-    fn decode_from_tars(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
+impl DecodeTars for TestStruct2 {
+    fn _decode(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
         decoder.read_struct(tag, true, Self::new())
     }
 }
 
-impl StrcutDecodeFromTars for TestStruct2 {
-    fn struct_decode_from_tars(decoder: &mut TarsDecoder) -> Result<Self, DecodeErr> {
+impl DecodeFromTars for TestStruct2 {
+    fn _decode_from(decoder: &mut TarsDecoder) -> Result<Self, DecodeErr> {
         let f1 = decoder.read_float(0, true, 0.0)?;
         let f2 = decoder.read_double(1, true, 0.0)?;
 
@@ -316,14 +316,14 @@ impl StrcutDecodeFromTars for TestStruct2 {
     }
 }
 
-impl EncodeIntoTars for TestStruct2 {
-    fn encode_into_tars(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
+impl EncodeTars for TestStruct2 {
+    fn _encode(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
         encoder.write_struct(tag, self)
     }
 }
 
-impl StructEncodeIntoTars for TestStruct2 {
-    fn struct_encode_into_tars(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
+impl EncodeToTars for TestStruct2 {
+    fn _encode_to(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
         encoder.write_float(0, self.f1)?;
         encoder.write_double(1, self.f2)?;
 
@@ -361,11 +361,11 @@ fn test_encode_decode_struct2() {
 
     let mut ts = TestStruct2::new();
 
-    ts.encode_into_tars(&mut encoder, 0).unwrap();
+    ts._encode(&mut encoder, 0).unwrap();
 
     let mut decoder = TarsDecoder::from(&encoder.to_bytes());
 
-    let de_ts = TestStruct2::decode_from_tars(&mut decoder, 0).unwrap();
+    let de_ts = TestStruct2::_decode(&mut decoder, 0).unwrap();
 
     assert_eq!(de_ts, ts);
 
@@ -413,11 +413,11 @@ fn test_encode_decode_struct2() {
     }
     let mut encoder = TarsEncoder::new();
 
-    ts.encode_into_tars(&mut encoder, 0).unwrap();
+    ts._encode(&mut encoder, 0).unwrap();
 
     let mut decoder = TarsDecoder::from(&encoder.to_bytes());
 
-    let de_ts = TestStruct2::decode_from_tars(&mut decoder, 0).unwrap();
+    let de_ts = TestStruct2::_decode(&mut decoder, 0).unwrap();
 
     assert_eq!(de_ts, ts);
 
@@ -427,11 +427,11 @@ fn test_encode_decode_struct2() {
 
     let mut encoder = TarsEncoder::new();
 
-    ts.encode_into_tars(&mut encoder, 0).unwrap();
+    ts._encode(&mut encoder, 0).unwrap();
 
     let mut decoder = TarsDecoder::from(&encoder.to_bytes());
 
-    let de_ts = TestStruct2::decode_from_tars(&mut decoder, 0).unwrap();
+    let de_ts = TestStruct2::_decode(&mut decoder, 0).unwrap();
 
     assert_eq!(de_ts, ts);
 }
@@ -455,14 +455,14 @@ impl TestOptionalStruct {
     }
 }
 
-impl DecodeFromTars for TestOptionalStruct {
-    fn decode_from_tars(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
+impl DecodeTars for TestOptionalStruct {
+    fn _decode(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
         decoder.read_struct(tag, true, Self::new())
     }
 }
 
-impl StrcutDecodeFromTars for TestOptionalStruct {
-    fn struct_decode_from_tars(decoder: &mut TarsDecoder) -> Result<TestOptionalStruct, DecodeErr> {
+impl DecodeFromTars for TestOptionalStruct {
+    fn _decode_from(decoder: &mut TarsDecoder) -> Result<TestOptionalStruct, DecodeErr> {
         let a = decoder.read_struct(0, false, TestStruct2::new())?;
 
         let b = decoder.read_bytes(1, true, Bytes::new())?;
@@ -474,14 +474,14 @@ impl StrcutDecodeFromTars for TestOptionalStruct {
     }
 }
 
-impl EncodeIntoTars for TestOptionalStruct {
-    fn encode_into_tars(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
+impl EncodeTars for TestOptionalStruct {
+    fn _encode(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
         encoder.write_struct(tag, self)
     }
 }
 
-impl StructEncodeIntoTars for TestOptionalStruct {
-    fn struct_encode_into_tars(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
+impl EncodeToTars for TestOptionalStruct {
+    fn _encode_to(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
         // write fake binary into encoder for test skip_field
 
         encoder.write_int8(128, i8::min_value())?;
@@ -510,11 +510,11 @@ impl StructEncodeIntoTars for TestOptionalStruct {
 fn test_encode_decode_optioal() {
     let s = TestOptionalStruct::new();
     let mut encoder = TarsEncoder::new();
-    s.struct_encode_into_tars(&mut encoder).unwrap();
+    s._encode_to(&mut encoder).unwrap();
     let buf = encoder.to_bytes();
 
     let mut decoder = TarsDecoder::from(&buf);
-    let de_s = TestOptionalStruct::struct_decode_from_tars(&mut decoder).unwrap();
+    let de_s = TestOptionalStruct::_decode_from(&mut decoder).unwrap();
 
     assert_eq!(s, de_s);
 }

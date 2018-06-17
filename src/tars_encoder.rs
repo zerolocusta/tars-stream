@@ -23,10 +23,10 @@ impl TarsEncoder {
 
     pub fn individual_encode<T>(ele: &T) -> Result<Bytes, EncodeErr>
     where
-        T: EncodeIntoTars,
+        T: EncodeTars,
     {
         let mut encoder = TarsEncoder::new();
-        ele.encode_into_tars(&mut encoder, 0)?;
+        ele._encode(&mut encoder, 0)?;
         Ok(encoder.to_bytes())
     }
 
@@ -86,23 +86,23 @@ pub trait TarsEncoderNormalTrait {
 
     fn write_map<K, V>(&mut self, tag: u8, ele: &BTreeMap<K, V>) -> Result<(), EncodeErr>
     where
-        K: EncodeIntoTars + Ord,
-        V: EncodeIntoTars;
+        K: EncodeTars + Ord,
+        V: EncodeTars;
 
     fn write_struct<T>(&mut self, tag: u8, ele: &T) -> Result<(), EncodeErr>
     where
-        T: StructEncodeIntoTars;
+        T: EncodeToTars;
 }
 
 pub trait TarsEncodeListTrait<T>
 where
-    T: EncodeIntoTars,
+    T: EncodeTars,
 {
     fn write_list(&mut self, tag: u8, ele: &Vec<T>) -> Result<(), EncodeErr>;
 }
 
-pub trait StructEncodeIntoTars {
-    fn struct_encode_into_tars(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr>;
+pub trait EncodeToTars {
+    fn _encode_to(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr>;
 }
 
 impl TarsEncoderNormalTrait for TarsEncoder {
@@ -227,8 +227,8 @@ impl TarsEncoderNormalTrait for TarsEncoder {
 
     fn write_map<K, V>(&mut self, tag: u8, ele: &BTreeMap<K, V>) -> Result<(), EncodeErr>
     where
-        K: EncodeIntoTars + Ord,
-        V: EncodeIntoTars,
+        K: EncodeTars + Ord,
+        V: EncodeTars,
     {
         let len = ele.len();
         if len > i32::max_value() as usize {
@@ -237,8 +237,8 @@ impl TarsEncoderNormalTrait for TarsEncoder {
             self.put_head(tag, EnMaps)?;
             self.write_int32(0, len as i32)?;
             for (key, value) in ele.iter() {
-                key.encode_into_tars(self, 0)?;
-                value.encode_into_tars(self, 1)?;
+                key._encode(self, 0)?;
+                value._encode(self, 1)?;
             }
             Ok(())
         }
@@ -246,17 +246,17 @@ impl TarsEncoderNormalTrait for TarsEncoder {
 
     fn write_struct<T>(&mut self, tag: u8, ele: &T) -> Result<(), EncodeErr>
     where
-        T: StructEncodeIntoTars,
+        T: EncodeToTars,
     {
         self.put_head(tag, EnStructBegin)?;
-        ele.struct_encode_into_tars(self)?;
+        ele._encode_to(self)?;
         self.put_head(0, EnStructEnd)
     }
 }
 
 impl<T> TarsEncodeListTrait<T> for TarsEncoder
 where
-    T: EncodeIntoTars,
+    T: EncodeTars,
 {
     default fn write_list(&mut self, tag: u8, ele: &Vec<T>) -> Result<(), EncodeErr> {
         let len = ele.len();
@@ -266,7 +266,7 @@ where
             self.put_head(tag, EnList)?;
             self.write_int32(0, len as i32)?;
             for ele in ele.into_iter() {
-                ele.encode_into_tars(self, 0)?;
+                ele._encode(self, 0)?;
             }
             Ok(())
         }
@@ -305,98 +305,98 @@ impl TarsEncodeListTrait<bool> for TarsEncoder {
     }
 }
 
-// EncodeIntoTars Trait, 各类型将自身写入 TarsEncoder 中
-pub trait EncodeIntoTars {
-    fn encode_into_tars(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr>;
+// EncodeTars Trait, 各类型将自身写入 TarsEncoder 中
+pub trait EncodeTars {
+    fn _encode(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr>;
 }
 
-impl EncodeIntoTars for i8 {
-    fn encode_into_tars(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
+impl EncodeTars for i8 {
+    fn _encode(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
         encoder.write_int8(tag, *self)
     }
 }
 
-impl EncodeIntoTars for i16 {
-    fn encode_into_tars(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
+impl EncodeTars for i16 {
+    fn _encode(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
         encoder.write_int16(tag, *self)
     }
 }
 
-impl EncodeIntoTars for i32 {
-    fn encode_into_tars(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
+impl EncodeTars for i32 {
+    fn _encode(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
         encoder.write_int32(tag, *self)
     }
 }
 
-impl EncodeIntoTars for i64 {
-    fn encode_into_tars(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
+impl EncodeTars for i64 {
+    fn _encode(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
         encoder.write_int64(tag, *self)
     }
 }
 
-impl EncodeIntoTars for u8 {
-    fn encode_into_tars(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
+impl EncodeTars for u8 {
+    fn _encode(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
         encoder.write_uint8(tag, *self)
     }
 }
 
-impl EncodeIntoTars for u16 {
-    fn encode_into_tars(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
+impl EncodeTars for u16 {
+    fn _encode(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
         encoder.write_uint16(tag, *self)
     }
 }
 
-impl EncodeIntoTars for u32 {
-    fn encode_into_tars(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
+impl EncodeTars for u32 {
+    fn _encode(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
         encoder.write_uint32(tag, *self)
     }
 }
 
-impl EncodeIntoTars for f32 {
-    fn encode_into_tars(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
+impl EncodeTars for f32 {
+    fn _encode(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
         encoder.write_float(tag, *self)
     }
 }
 
-impl EncodeIntoTars for f64 {
-    fn encode_into_tars(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
+impl EncodeTars for f64 {
+    fn _encode(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
         encoder.write_double(tag, *self)
     }
 }
 
-impl EncodeIntoTars for bool {
-    fn encode_into_tars(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
+impl EncodeTars for bool {
+    fn _encode(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
         encoder.write_boolean(tag, *self)
     }
 }
 
-impl EncodeIntoTars for String {
-    fn encode_into_tars(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
+impl EncodeTars for String {
+    fn _encode(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
         encoder.write_string(tag, self)
     }
 }
 
-impl<K, V> EncodeIntoTars for BTreeMap<K, V>
+impl<K, V> EncodeTars for BTreeMap<K, V>
 where
-    K: EncodeIntoTars + Ord,
-    V: EncodeIntoTars,
+    K: EncodeTars + Ord,
+    V: EncodeTars,
 {
-    fn encode_into_tars(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
+    fn _encode(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
         encoder.write_map(tag, self)
     }
 }
 
-impl<T> EncodeIntoTars for Vec<T>
+impl<T> EncodeTars for Vec<T>
 where
-    T: EncodeIntoTars,
+    T: EncodeTars,
 {
-    fn encode_into_tars(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
+    fn _encode(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
         encoder.write_list(tag, self)
     }
 }
 
-impl EncodeIntoTars for Bytes {
-    fn encode_into_tars(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
+impl EncodeTars for Bytes {
+    fn _encode(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
         encoder.write_bytes(tag, self)
     }
 }

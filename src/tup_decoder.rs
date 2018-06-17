@@ -1,7 +1,7 @@
 use bytes::Bytes;
 use errors::DecodeErr;
 use std::collections::BTreeMap;
-use tars_decoder::{DecodeFromTars, TarsDecodeListTrait, TarsDecodeNormalTrait, TarsDecoder};
+use tars_decoder::{DecodeTars, TarsDecodeListTrait, TarsDecodeNormalTrait, TarsDecoder};
 use tars_type::{ClassName, ProtocolVersion};
 
 type SimpleTupMap = BTreeMap<String, Bytes>;
@@ -68,7 +68,7 @@ impl TupDecoder {
 
     pub fn find<T>(&self, name: &String) -> Result<Option<T>, DecodeErr>
     where
-        T: DecodeFromTars + ClassName,
+        T: DecodeTars + ClassName,
     {
         match self.version {
             ProtocolVersion::TupSimple => match self.simple_map.get(name) {
@@ -106,7 +106,7 @@ impl TupDecoderTrait for TupDecoder {
 
 // impl<T> TupDecoderTrait<T> for TupDecoder<SimpleTup>
 // where
-//     T: DecodeFromTars,
+//     T: DecodeTars,
 // {
 //     fn get(&self, name: &String) -> Result<T, DecodeErr> {
 //         match self.map.get(name) {
@@ -120,7 +120,7 @@ impl TupDecoderTrait for TupDecoder {
 
 // impl<T> TupDecoderTrait<Option<T>> for TupDecoder<SimpleTup>
 // where
-//     T: DecodeFromTars,
+//     T: DecodeTars,
 // {
 //     fn get(&self, name: &String) -> Result<Option<T>, DecodeErr> {
 //         match self.map.get(name) {
@@ -132,7 +132,7 @@ impl TupDecoderTrait for TupDecoder {
 
 // impl<T> TupDecoderTrait<T> for TupDecoder<ComplexTup>
 // where
-//     T: DecodeFromTars + ClassName,
+//     T: DecodeTars + ClassName,
 // {
 //     fn get(&self, name: &String) -> Result<T, DecodeErr> {
 //         match self.map.get(name) {
@@ -151,7 +151,7 @@ impl TupDecoderTrait for TupDecoder {
 
 // impl<T> TupDecoderTrait<Option<T>> for TupDecoder<ComplexTup>
 // where
-//     T: DecodeFromTars + ClassName,
+//     T: DecodeTars + ClassName,
 // {
 //     fn get(&self, name: &String) -> Result<Option<T>, DecodeErr> {
 //         match self.map.get(name) {
