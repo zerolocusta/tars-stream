@@ -3,7 +3,7 @@ use errors::EncodeErr;
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::mem;
-use tars_trait::{EnumFromI32, EnumToI32, StructToTars};
+use tars_trait::{EnumToI32, StructToTars};
 use tars_type::TarsTypeMark::*;
 use tars_type::*;
 

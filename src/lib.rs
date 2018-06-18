@@ -16,8 +16,7 @@ pub mod tars_trait;
 pub mod tars_decoder;
 pub mod tars_encoder;
 
-pub mod tup_decoder;
-pub mod tup_encoder;
+pub mod tup_uni_attribute;
 
 pub mod prelude {
     pub use errors::*;
@@ -25,4 +24,5 @@ pub mod prelude {
     pub use tars_encoder::*;
     pub use tars_trait::*;
     pub use tars_type::*;
+    pub use tup_uni_attribute::*;
 }

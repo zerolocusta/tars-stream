@@ -498,3 +498,28 @@ fn test_encode_decode_optioal() {
 
     assert_eq!(s, de_s);
 }
+
+#[test]
+fn test_encode_decode_tup() {
+    let mut uni = TupUniAttribute::new(ProtocolVersion::TupSimple);
+
+    let key0 = "struct".to_string();
+    let key1 = "enum".to_string();
+    let fake_key = "fake_key".to_string();
+
+    let ts = TestStruct2::random_for_test();
+    let te = TestEnum::B;
+
+    uni.write(&key0, &ts).unwrap();
+    uni.write(&key1, &te).unwrap();
+
+    let de_ts = uni.read(&key0, true, TestStruct2::new()).unwrap();
+    let de_te = uni.read(&key1, true, TestEnum::A).unwrap();
+
+    assert_eq!(de_ts, ts);
+    assert_eq!(de_te, te);
+
+    let fake_default = TestStruct2::random_for_test();
+    let de_fake_value = uni.read(&fake_key, false, fake_default.clone()).unwrap();
+    assert_eq!(de_fake_value, fake_default);
+}

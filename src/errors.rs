@@ -29,7 +29,7 @@ quick_error!{
             description("decoder: Tup Key Not Found")
         }
         UnsupportTupVersionErr {
-            description("decoder: Tup Unsupport protocol version")
+            description("decoder: Unsupport protocol version")
         }
     }
 }
@@ -57,6 +57,9 @@ quick_error!{
         }
         UnknownTarsTypeErr{
             description("encoder: unknown tars type")
+        }
+        UnsupportTupVersionErr {
+            description("encoder:  Unsupport protocol version")
         }
     }
 }
