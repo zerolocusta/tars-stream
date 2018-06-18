@@ -19,7 +19,6 @@ pub struct TupUniAttribute {
 }
 // for SimpleTup protocol version
 impl TupUniAttribute {
-
     fn return_error_if_required_not_found<T>(
         is_require: bool,
         default_value: T,
@@ -92,13 +91,14 @@ impl TupUniAttribute {
         }
     }
 
-    pub fn write<T>(&mut self, name: &String, value: &T) -> Result<(), EncodeErr> 
+    pub fn write<T>(&mut self, name: &String, value: &T) -> Result<(), EncodeErr>
     where
-        T: EncodeTars + ClassName
+        T: EncodeTars + ClassName,
     {
         match self.version {
             ProtocolVersion::TupSimple => {
-                self.simple_map.insert(name.clone(), TarsEncoder::individual_encode(value)?);
+                self.simple_map
+                    .insert(name.clone(), TarsEncoder::individual_encode(value)?);
                 Ok(())
             }
             ProtocolVersion::TupComplex => {
@@ -110,7 +110,6 @@ impl TupUniAttribute {
             _ => Err(EncodeErr::UnsupportTupVersionErr),
         }
     }
-
 }
 
 #[cfg(test)]
@@ -551,20 +550,20 @@ mod tests {
 
         let mut uni = TupUniAttribute::new(ProtocolVersion::TupSimple);
 
-        uni.write(&key0, &value0).unwrap();    
-        uni.write(&key1, &value1).unwrap();    
-        uni.write(&key2, &value2).unwrap();    
-        uni.write(&key3, &value3).unwrap();    
-        uni.write(&key4, &value4).unwrap();    
-        uni.write(&key5, &value5).unwrap();    
-        uni.write(&key6, &value6).unwrap();    
-        uni.write(&key7, &value7).unwrap();    
-        uni.write(&key8, &value8).unwrap();    
-        uni.write(&key9, &value9).unwrap();    
-        uni.write(&key10, &value10).unwrap();    
-        uni.write(&key11, &value11).unwrap();    
-        uni.write(&key12, &value12).unwrap();    
-        uni.write(&key13, &value13).unwrap();    
+        uni.write(&key0, &value0).unwrap();
+        uni.write(&key1, &value1).unwrap();
+        uni.write(&key2, &value2).unwrap();
+        uni.write(&key3, &value3).unwrap();
+        uni.write(&key4, &value4).unwrap();
+        uni.write(&key5, &value5).unwrap();
+        uni.write(&key6, &value6).unwrap();
+        uni.write(&key7, &value7).unwrap();
+        uni.write(&key8, &value8).unwrap();
+        uni.write(&key9, &value9).unwrap();
+        uni.write(&key10, &value10).unwrap();
+        uni.write(&key11, &value11).unwrap();
+        uni.write(&key12, &value12).unwrap();
+        uni.write(&key13, &value13).unwrap();
         uni.write(&key14, &value14).unwrap();
 
         let de_0: i64 = uni.read(&key0, true, 0).unwrap();
@@ -616,7 +615,7 @@ mod tests {
         assert_eq!(de_fake_value_err, Err(DecodeErr::TupKeyNotFoundErr));
 
         let de_fake_value = uni.read(&fake_key, false, 0).unwrap();
-        assert_eq!(de_fake_value, 0); 
+        assert_eq!(de_fake_value, 0);
     }
 
     #[test]
@@ -670,20 +669,20 @@ mod tests {
 
         let mut uni = TupUniAttribute::new(ProtocolVersion::TupComplex);
 
-        uni.write(&key0, &value0).unwrap();    
-        uni.write(&key1, &value1).unwrap();    
-        uni.write(&key2, &value2).unwrap();    
-        uni.write(&key3, &value3).unwrap();    
-        uni.write(&key4, &value4).unwrap();    
-        uni.write(&key5, &value5).unwrap();    
-        uni.write(&key6, &value6).unwrap();    
-        uni.write(&key7, &value7).unwrap();    
-        uni.write(&key8, &value8).unwrap();    
-        uni.write(&key9, &value9).unwrap();    
-        uni.write(&key10, &value10).unwrap();    
-        uni.write(&key11, &value11).unwrap();    
-        uni.write(&key12, &value12).unwrap();    
-        uni.write(&key13, &value13).unwrap();    
+        uni.write(&key0, &value0).unwrap();
+        uni.write(&key1, &value1).unwrap();
+        uni.write(&key2, &value2).unwrap();
+        uni.write(&key3, &value3).unwrap();
+        uni.write(&key4, &value4).unwrap();
+        uni.write(&key5, &value5).unwrap();
+        uni.write(&key6, &value6).unwrap();
+        uni.write(&key7, &value7).unwrap();
+        uni.write(&key8, &value8).unwrap();
+        uni.write(&key9, &value9).unwrap();
+        uni.write(&key10, &value10).unwrap();
+        uni.write(&key11, &value11).unwrap();
+        uni.write(&key12, &value12).unwrap();
+        uni.write(&key13, &value13).unwrap();
         uni.write(&key14, &value14).unwrap();
 
         let de_0: i64 = uni.read(&key0, true, 0).unwrap();
@@ -735,6 +734,6 @@ mod tests {
         assert_eq!(de_fake_value_err, Err(DecodeErr::TupKeyNotFoundErr));
 
         let de_fake_value = uni.read(&fake_key, false, 0).unwrap();
-        assert_eq!(de_fake_value, 0); 
+        assert_eq!(de_fake_value, 0);
     }
 }

@@ -15,7 +15,7 @@ struct TestStruct {
     a: i8,       // tag 0
     b: u16,      // tag 1
     v1: Vec<u8>, // tag 2
-    c: String,   // tag 3 option
+    c: String,   // tag 3
     v2: Vec<i8>,
     v3: Vec<bool>,
 }

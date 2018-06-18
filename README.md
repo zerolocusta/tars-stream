@@ -5,7 +5,7 @@ for tencent/Tars TARS Protocol encoding/decoding
 |Tars Type|Rust Type|
 |---------|---------|
 |bool|bool|
-|char|i8|
+|byte|i8|
 |short|i16|
 |int|i32|
 |long|i64|
