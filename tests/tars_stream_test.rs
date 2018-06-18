@@ -62,7 +62,7 @@ impl TestStruct {
     }
 }
 
-impl EncodeToTars for TestStruct {
+impl StructToTars for TestStruct {
     fn _encode_to(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
         encoder.write_int8(0, self.a)?;
         encoder.write_uint16(1, self.b)?;
@@ -74,7 +74,7 @@ impl EncodeToTars for TestStruct {
     }
 }
 
-impl DecodeFromTars for TestStruct {
+impl StructFromTars for TestStruct {
     fn _decode_from(decoder: &mut TarsDecoder) -> Result<Self, DecodeErr> {
         let a = decoder.read_int8(0, true, 0)?;
         let b = decoder.read_uint16(1, true, 0)?;
@@ -144,17 +144,29 @@ enum TestEnum {
 
 impl DecodeTars for TestEnum {
     fn _decode(decoder: &mut TarsDecoder, tag: u8) -> Result<Self, DecodeErr> {
-        match decoder.read_int32(tag, true, -32)? {
-            -32 => Ok(TestEnum::A),
-            1337 => Ok(TestEnum::B),
-            _ => Err(DecodeErr::InvalidEnumValue),
-        }
+        decoder.read_enum(tag, true, TestEnum::A)
     }
 }
 
 impl EncodeTars for TestEnum {
     fn _encode(&self, encoder: &mut TarsEncoder, tag: u8) -> Result<(), EncodeErr> {
-        encoder.write_int32(tag, (self.clone()) as i32)
+        encoder.write_enum(tag, self)
+    }
+}
+
+impl EnumToI32 for TestEnum {
+    fn _to_i32(&self) -> i32 {
+        self.clone() as i32
+    }
+}
+
+impl EnumFromI32 for TestEnum {
+    fn _from_i32(ele: i32) -> Result<Self, DecodeErr> {
+        match ele {
+            -32 => Ok(TestEnum::A),
+            1337 => Ok(TestEnum::B),
+            _ => Err(DecodeErr::InvalidEnumValue),
+        }
     }
 }
 
@@ -187,6 +199,8 @@ struct TestStruct2 {
     z: TestStruct,               // 15
     x: Bytes,
     e: Vec<TestEnum>,
+
+    e1: TestEnum,
 }
 
 impl TestStruct2 {
@@ -213,6 +227,7 @@ impl TestStruct2 {
             z: TestStruct::new(),
             x: Bytes::new(),
             e: vec![],
+            e1: TestEnum::A,
         }
     }
 
@@ -260,6 +275,8 @@ impl TestStruct2 {
             }
         }
 
+        ts.e1 = TestEnum::B;
+
         ts
     }
 }
@@ -270,7 +287,7 @@ impl DecodeTars for TestStruct2 {
     }
 }
 
-impl DecodeFromTars for TestStruct2 {
+impl StructFromTars for TestStruct2 {
     fn _decode_from(decoder: &mut TarsDecoder) -> Result<Self, DecodeErr> {
         let f1 = decoder.read_float(0, true, 0.0)?;
         let f2 = decoder.read_double(1, true, 0.0)?;
@@ -293,6 +310,7 @@ impl DecodeFromTars for TestStruct2 {
         let z = decoder.read_struct(14, false, TestStruct::new())?;
         let x = decoder.read_bytes(15, true, Bytes::new())?;
         let e = decoder.read_list(16, true, vec![])?;
+        let e1 = decoder.read_enum(17, true, TestEnum::A)?;
 
         Ok(TestStruct2 {
             f1,
@@ -312,6 +330,7 @@ impl DecodeFromTars for TestStruct2 {
             z,
             x,
             e,
+            e1,
         })
     }
 }
@@ -322,7 +341,7 @@ impl EncodeTars for TestStruct2 {
     }
 }
 
-impl EncodeToTars for TestStruct2 {
+impl StructToTars for TestStruct2 {
     fn _encode_to(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
         encoder.write_float(0, self.f1)?;
         encoder.write_double(1, self.f2)?;
@@ -344,7 +363,7 @@ impl EncodeToTars for TestStruct2 {
         encoder.write_struct(14, &self.z)?;
         encoder.write_bytes(15, &self.x)?;
         encoder.write_list(16, &self.e)?;
-
+        encoder.write_enum(17, &self.e1)?;
         Ok(())
     }
 }
@@ -359,7 +378,7 @@ impl ClassName for TestStruct2 {
 fn test_encode_decode_struct2() {
     let mut encoder = TarsEncoder::new();
 
-    let mut ts = TestStruct2::new();
+    let ts = TestStruct2::new();
 
     ts._encode(&mut encoder, 0).unwrap();
 
@@ -370,47 +389,8 @@ fn test_encode_decode_struct2() {
     assert_eq!(de_ts, ts);
 
     // case 2
+    let mut ts = TestStruct2::random_for_test();
 
-    ts.f1 = random();
-    ts.f2 = random();
-
-    ts.i1 = random();
-    ts.i2 = random();
-    ts.i3 = random();
-    ts.i4 = random();
-
-    ts.u1 = random();
-    ts.u2 = random();
-    ts.u3 = random();
-
-    ts.b = random();
-
-    ts.s = TestStruct::random_for_test();
-
-    let v_len: u8 = random();
-    for _ in 0..v_len {
-        ts.v.push(TestStruct::random_for_test());
-    }
-
-    let m_len: u8 = random();
-    for _ in 0..m_len {
-        ts.m
-            .insert(Uuid::new_v4().to_string(), Uuid::new_v4().to_string());
-    }
-
-    ts.y = random();
-    ts.z = TestStruct::random_for_test();
-    ts.x = Bytes::from(ts.s.v1.as_slice());
-
-    let e_len: u8 = random();
-    for _ in 0..e_len {
-        let b: bool = random();
-        if b {
-            ts.e.push(TestEnum::A);
-        } else {
-            ts.e.push(TestEnum::B);
-        }
-    }
     let mut encoder = TarsEncoder::new();
 
     ts._encode(&mut encoder, 0).unwrap();
@@ -461,7 +441,7 @@ impl DecodeTars for TestOptionalStruct {
     }
 }
 
-impl DecodeFromTars for TestOptionalStruct {
+impl StructFromTars for TestOptionalStruct {
     fn _decode_from(decoder: &mut TarsDecoder) -> Result<TestOptionalStruct, DecodeErr> {
         let a = decoder.read_struct(0, false, TestStruct2::new())?;
 
@@ -480,7 +460,7 @@ impl EncodeTars for TestOptionalStruct {
     }
 }
 
-impl EncodeToTars for TestOptionalStruct {
+impl StructToTars for TestOptionalStruct {
     fn _encode_to(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr> {
         // write fake binary into encoder for test skip_field
 

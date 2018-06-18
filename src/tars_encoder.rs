@@ -3,6 +3,7 @@ use errors::EncodeErr;
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::mem;
+use tars_trait::{EnumFromI32, EnumToI32, StructToTars};
 use tars_type::TarsTypeMark::*;
 use tars_type::*;
 
@@ -89,9 +90,13 @@ pub trait TarsEncoderNormalTrait {
         K: EncodeTars + Ord,
         V: EncodeTars;
 
+    fn write_enum<T>(&mut self, tag: u8, ele: &T) -> Result<(), EncodeErr>
+    where
+        T: EnumToI32;
+
     fn write_struct<T>(&mut self, tag: u8, ele: &T) -> Result<(), EncodeErr>
     where
-        T: EncodeToTars;
+        T: StructToTars;
 }
 
 pub trait TarsEncodeListTrait<T>
@@ -99,10 +104,6 @@ where
     T: EncodeTars,
 {
     fn write_list(&mut self, tag: u8, ele: &Vec<T>) -> Result<(), EncodeErr>;
-}
-
-pub trait EncodeToTars {
-    fn _encode_to(&self, encoder: &mut TarsEncoder) -> Result<(), EncodeErr>;
 }
 
 impl TarsEncoderNormalTrait for TarsEncoder {
@@ -244,9 +245,16 @@ impl TarsEncoderNormalTrait for TarsEncoder {
         }
     }
 
+    fn write_enum<T>(&mut self, tag: u8, ele: &T) -> Result<(), EncodeErr>
+    where
+        T: EnumToI32,
+    {
+        self.write_int32(tag, ele._to_i32())
+    }
+
     fn write_struct<T>(&mut self, tag: u8, ele: &T) -> Result<(), EncodeErr>
     where
-        T: EncodeToTars,
+        T: StructToTars,
     {
         self.put_head(tag, EnStructBegin)?;
         ele._encode_to(self)?;

@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use std::mem;
 
 use errors::DecodeErr;
+use tars_trait::{EnumFromI32, EnumToI32, StructFromTars};
 use tars_type::TarsTypeMark;
 use tars_type::TarsTypeMark::*;
 
@@ -237,18 +238,21 @@ pub trait TarsDecodeNormalTrait {
         is_require: bool,
         default_value: bool,
     ) -> Result<bool, DecodeErr>;
+
     fn read_int16(
         &mut self,
         tag: u8,
         is_require: bool,
         default_value: i16,
     ) -> Result<i16, DecodeErr>;
+
     fn read_int32(
         &mut self,
         tag: u8,
         is_require: bool,
         default_value: i32,
     ) -> Result<i32, DecodeErr>;
+
     fn read_int64(
         &mut self,
         tag: u8,
@@ -258,12 +262,14 @@ pub trait TarsDecodeNormalTrait {
 
     fn read_uint8(&mut self, tag: u8, is_require: bool, default_value: u8)
         -> Result<u8, DecodeErr>;
+
     fn read_uint16(
         &mut self,
         tag: u8,
         is_require: bool,
         default_value: u16,
     ) -> Result<u16, DecodeErr>;
+
     fn read_uint32(
         &mut self,
         tag: u8,
@@ -277,12 +283,14 @@ pub trait TarsDecodeNormalTrait {
         is_require: bool,
         default_value: f32,
     ) -> Result<f32, DecodeErr>;
+
     fn read_double(
         &mut self,
         tag: u8,
         is_require: bool,
         default_value: f64,
     ) -> Result<f64, DecodeErr>;
+
     fn read_string(
         &mut self,
         tag: u8,
@@ -307,6 +315,10 @@ pub trait TarsDecodeNormalTrait {
         K: DecodeTars + Ord,
         V: DecodeTars;
 
+    fn read_enum<T>(&mut self, tag: u8, is_require: bool, default_value: T) -> Result<T, DecodeErr>
+    where
+        T: EnumFromI32 + EnumToI32;
+
     fn read_struct<T>(
         &mut self,
         tag: u8,
@@ -314,7 +326,7 @@ pub trait TarsDecodeNormalTrait {
         default_value: T,
     ) -> Result<T, DecodeErr>
     where
-        T: DecodeFromTars;
+        T: StructFromTars;
 }
 
 pub trait TarsDecodeListTrait<T>
@@ -327,12 +339,6 @@ where
         is_require: bool,
         default_value: Vec<T>,
     ) -> Result<Vec<T>, DecodeErr>;
-}
-
-pub trait DecodeFromTars {
-    fn _decode_from(decoder: &mut TarsDecoder) -> Result<Self, DecodeErr>
-    where
-        Self: Sized;
 }
 
 impl TarsDecodeNormalTrait for TarsDecoder {
@@ -590,6 +596,14 @@ impl TarsDecodeNormalTrait for TarsDecoder {
         }
     }
 
+    fn read_enum<T>(&mut self, tag: u8, is_require: bool, default_value: T) -> Result<T, DecodeErr>
+    where
+        T: EnumFromI32 + EnumToI32,
+    {
+        let i = self.read_int32(tag, is_require, default_value._to_i32())?;
+        T::_from_i32(i)
+    }
+
     fn read_struct<T>(
         &mut self,
         tag: u8,
@@ -597,7 +611,7 @@ impl TarsDecodeNormalTrait for TarsDecoder {
         default_value: T,
     ) -> Result<T, DecodeErr>
     where
-        T: DecodeFromTars,
+        T: StructFromTars,
     {
         match self.skip_to_tag(tag) {
             Ok(head) => match head.tars_type {
